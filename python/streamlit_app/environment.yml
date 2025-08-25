@@ -1,0 +1,11 @@
+name: app_environment
+channels:
+  - snowflake
+dependencies:
+  - python=3.11.*
+  - snowflake-snowpark-python
+  - snowflake.core=1.6.0
+  - streamlit
+  - pandas
+  - numpy
+  - python-dateutil

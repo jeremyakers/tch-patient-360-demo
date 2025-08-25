@@ -1,0 +1,34 @@
+# Texas Children's Hospital Patient 360 PoC - Configuration Template
+# Copy this file to config.toml and update with your Snowflake details
+
+[deployment]
+# Snowflake connection details
+account = "your_account_identifier"      # e.g., "xy12345.us-east-1"
+user = "your_username"                   # Your Snowflake username
+database = "TCH_PATIENT_360_POC"         # Database name for the PoC
+role = "TCH_PATIENT_360_ROLE"            # Role that owns PoC resources
+
+# Authentication (choose one method)
+# Method 1: Password authentication
+password = "your_password"
+
+# Method 2: Private key authentication (comment out password above)
+# private_key_path = "/path/to/your/private_key.p8"
+# private_key_passphrase = "your_passphrase"    # Optional if key is encrypted
+
+[data_generation]
+# Mock data generation settings
+size = "medium"                          # Options: small (1K patients), medium (5K), large (25K)
+skip_generation = false                  # Set to true to skip data generation step
+
+[features]
+# Feature toggles
+deploy_streamlit = true                  # Deploy Streamlit in Snowflake app
+clean_deploy = false                     # Drop existing objects before deployment
+verbose_logging = false                  # Enable detailed logging
+
+[warehouses]
+# Warehouse configuration (these are created by ACCOUNTADMIN setup)
+compute = "TCH_COMPUTE_WH"              # General compute warehouse
+analytics = "TCH_ANALYTICS_WH"          # Analytics workloads
+ai_ml = "TCH_AI_ML_WH"                  # AI/ML and Cortex functions

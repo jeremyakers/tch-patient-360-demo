@@ -1,0 +1,8 @@
+name: tch_data_generator_environment
+channels:
+  - snowflake
+dependencies:
+  - faker=*
+  - pandas=*
+  - numpy=*
+  - snowflake-snowpark-python=*
