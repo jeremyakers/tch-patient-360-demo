@@ -1,0 +1,9 @@
+definition_version: 2
+entities:
+  tch_data_generator:
+    type: notebook
+    query_warehouse: TCH_COMPUTE_WH
+    notebook_file: tch_data_generator.ipynb
+    artifacts:
+      - tch_data_generator.ipynb
+      - environment.yml

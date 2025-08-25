@@ -1,0 +1,572 @@
+-- Texas Children's Hospital Patient 360 PoC - Raw Data Loading
+-- Loads generated mock data into raw data tables
+
+USE DATABASE TCH_PATIENT_360_POC;
+USE WAREHOUSE TCH_COMPUTE_WH;
+
+-- =============================================================================
+-- SETUP VARIABLES AND PARAMETERS
+-- =============================================================================
+
+-- Set variables for data loading (can be overridden by deployment script)
+SET data_path = '@RAW_DATA.PATIENT_DATA_STAGE';
+
+-- =============================================================================
+-- LOAD PATIENT DEMOGRAPHICS
+-- =============================================================================
+
+-- Ensure we're in the correct database context for file format access
+USE DATABASE TCH_PATIENT_360_POC;
+-- Note: Staying at database level to access file formats, using fully qualified table names
+
+-- Load patients
+TRUNCATE TABLE EPIC.PATIENTS;
+
+COPY INTO EPIC.PATIENTS (
+    patient_id,
+    mrn,
+    first_name,
+    last_name,
+    date_of_birth,
+    age,
+    gender,
+    race,
+    ethnicity,
+    zip_code,
+    insurance_type,
+    language,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS patient_id,
+        $2::VARCHAR(20) AS mrn,
+        $3::VARCHAR(100) AS first_name,
+        $4::VARCHAR(100) AS last_name,
+        $5::DATE AS date_of_birth,
+        $6::INTEGER AS age,
+        $7::VARCHAR(1) AS gender,
+        $8::VARCHAR(100) AS race,
+        $9::VARCHAR(100) AS ethnicity,
+        $10::VARCHAR(10) AS zip_code,
+        $11::VARCHAR(50) AS insurance_type,
+        $12::VARCHAR(50) AS language,
+        $13::TIMESTAMP_NTZ AS created_date,
+        $14::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/patients.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify patient load
+SELECT 'Patients loaded: ' || COUNT(*) AS load_status FROM EPIC.PATIENTS;
+
+-- =============================================================================
+-- LOAD ENCOUNTER DATA
+-- =============================================================================
+
+-- Load encounters
+TRUNCATE TABLE EPIC.ENCOUNTERS;
+
+COPY INTO EPIC.ENCOUNTERS (
+    encounter_id,
+    patient_id,
+    encounter_date,
+    encounter_type,
+    department,
+    attending_physician,
+    admission_date,
+    discharge_date,
+    length_of_stay,
+    chief_complaint,
+    status,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS encounter_id,
+        $2::VARCHAR(20) AS patient_id,
+        $3::TIMESTAMP_NTZ AS encounter_date,
+        $4::VARCHAR(50) AS encounter_type,
+        $5::VARCHAR(100) AS department,
+        $6::VARCHAR(200) AS attending_physician,
+        $7::TIMESTAMP_NTZ AS admission_date,
+        CASE WHEN $8 = 'None' OR $8 = '' THEN NULL ELSE $8::TIMESTAMP_NTZ END AS discharge_date,
+        CASE WHEN $9 = 'None' OR $9 = '' THEN NULL ELSE $9::INTEGER END AS length_of_stay,
+        $10::VARCHAR(500) AS chief_complaint,
+        $11::VARCHAR(50) AS status,
+        $12::TIMESTAMP_NTZ AS created_date,
+        $13::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/encounters.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify encounter load
+SELECT 'Encounters loaded: ' || COUNT(*) AS load_status FROM EPIC.ENCOUNTERS;
+
+-- =============================================================================
+-- LOAD CLINICAL DATA
+-- =============================================================================
+
+-- Load diagnoses
+TRUNCATE TABLE EPIC.DIAGNOSES;
+
+COPY INTO EPIC.DIAGNOSES (
+    diagnosis_id,
+    encounter_id,
+    patient_id,
+    diagnosis_code,
+    diagnosis_description,
+    diagnosis_type,
+    diagnosis_date,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS diagnosis_id,
+        $2::VARCHAR(20) AS encounter_id,
+        $3::VARCHAR(20) AS patient_id,
+        $4::VARCHAR(20) AS diagnosis_code,
+        $5::VARCHAR(500) AS diagnosis_description,
+        $6::VARCHAR(50) AS diagnosis_type,
+        $7::DATE AS diagnosis_date,
+        $8::TIMESTAMP_NTZ AS created_date,
+        $9::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/diagnoses.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify diagnosis load
+SELECT 'Diagnoses loaded: ' || COUNT(*) AS load_status FROM EPIC.DIAGNOSES;
+
+-- Load lab results
+TRUNCATE TABLE EPIC.LAB_RESULTS;
+
+COPY INTO EPIC.LAB_RESULTS (
+    lab_result_id,
+    encounter_id,
+    patient_id,
+    test_name,
+    test_value,
+    reference_range,
+    abnormal_flag,
+    result_date,
+    ordering_provider,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS lab_result_id,
+        $2::VARCHAR(20) AS encounter_id,
+        $3::VARCHAR(20) AS patient_id,
+        $4::VARCHAR(200) AS test_name,
+        $5::VARCHAR(100) AS test_value,
+        $6::VARCHAR(100) AS reference_range,
+        $7::VARCHAR(5) AS abnormal_flag,
+        $8::TIMESTAMP_NTZ AS result_date,
+        $9::VARCHAR(200) AS ordering_provider,
+        $10::TIMESTAMP_NTZ AS created_date,
+        $11::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/lab_results.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify lab results load
+SELECT 'Lab results loaded: ' || COUNT(*) AS load_status FROM EPIC.LAB_RESULTS;
+
+-- Load medications
+TRUNCATE TABLE EPIC.MEDICATIONS;
+
+COPY INTO EPIC.MEDICATIONS (
+    medication_id,
+    encounter_id,
+    patient_id,
+    medication_name,
+    dosage,
+    frequency,
+    route,
+    start_date,
+    end_date,
+    prescribing_provider,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS medication_id,
+        $2::VARCHAR(20) AS encounter_id,
+        $3::VARCHAR(20) AS patient_id,
+        $4::VARCHAR(200) AS medication_name,
+        $5::VARCHAR(100) AS dosage,
+        $6::VARCHAR(100) AS frequency,
+        $7::VARCHAR(50) AS route,
+        $8::DATE AS start_date,
+        $9::DATE AS end_date,
+        $10::VARCHAR(200) AS prescribing_provider,
+        $11::TIMESTAMP_NTZ AS created_date,
+        $12::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/medications.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify medications load
+SELECT 'Medications loaded: ' || COUNT(*) AS load_status FROM EPIC.MEDICATIONS;
+
+-- Load vital signs
+TRUNCATE TABLE EPIC.VITAL_SIGNS;
+
+COPY INTO EPIC.VITAL_SIGNS (
+    vital_sign_id,
+    encounter_id,
+    patient_id,
+    temperature,
+    heart_rate,
+    respiratory_rate,
+    blood_pressure_systolic,
+    blood_pressure_diastolic,
+    oxygen_saturation,
+    weight_kg,
+    height_cm,
+    recorded_date,
+    recorded_by,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS vital_sign_id,
+        $2::VARCHAR(20) AS encounter_id,
+        $3::VARCHAR(20) AS patient_id,
+        $4::DECIMAL(4,1) AS temperature,
+        $5::INTEGER AS heart_rate,
+        $6::INTEGER AS respiratory_rate,
+        $7::INTEGER AS blood_pressure_systolic,
+        $8::INTEGER AS blood_pressure_diastolic,
+        $9::INTEGER AS oxygen_saturation,
+        $10::DECIMAL(6,2) AS weight_kg,
+        $11::DECIMAL(6,1) AS height_cm,
+        $12::TIMESTAMP_NTZ AS recorded_date,
+        $13::VARCHAR(200) AS recorded_by,
+        $14::TIMESTAMP_NTZ AS created_date,
+        $15::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/vital_signs.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify vital signs load
+SELECT 'Vital signs loaded: ' || COUNT(*) AS load_status FROM EPIC.VITAL_SIGNS;
+
+-- =============================================================================
+-- LOAD IMAGING DATA
+-- =============================================================================
+
+-- Load imaging studies
+TRUNCATE TABLE EPIC.IMAGING_STUDIES;
+
+COPY INTO EPIC.IMAGING_STUDIES (
+    imaging_study_id,
+    encounter_id,
+    patient_id,
+    study_type,
+    study_name,
+    study_date,
+    ordering_provider,
+    performing_department,
+    study_status,
+    modality,
+    body_part,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS imaging_study_id,
+        $2::VARCHAR(20) AS encounter_id,
+        $3::VARCHAR(20) AS patient_id,
+        $4::VARCHAR(50) AS study_type,
+        $5::VARCHAR(200) AS study_name,
+        $6::TIMESTAMP_NTZ AS study_date,
+        $7::VARCHAR(200) AS ordering_provider,
+        $8::VARCHAR(100) AS performing_department,
+        $9::VARCHAR(50) AS study_status,
+        $10::VARCHAR(10) AS modality,
+        $11::VARCHAR(100) AS body_part,
+        $12::TIMESTAMP_NTZ AS created_date,
+        $13::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/imaging_studies.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify imaging studies load
+SELECT 'Imaging studies loaded: ' || COUNT(*) AS load_status FROM EPIC.IMAGING_STUDIES;
+
+-- =============================================================================
+-- LOAD CLINICAL DOCUMENTATION
+-- =============================================================================
+
+-- Load clinical notes metadata
+TRUNCATE TABLE EPIC.CLINICAL_NOTES;
+
+COPY INTO EPIC.CLINICAL_NOTES (
+    note_id,
+    patient_id,
+    encounter_id,
+    note_type,
+    note_date,
+    author,
+    department,
+    note_content,
+    diagnosis_codes,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS note_id,
+        $2::VARCHAR(20) AS patient_id,
+        $3::VARCHAR(20) AS encounter_id,
+        $4::VARCHAR(100) AS note_type,
+        $5::TIMESTAMP_NTZ AS note_date,
+        $6::VARCHAR(200) AS author,
+        $7::VARCHAR(100) AS department,
+        '' AS note_content, -- Will be loaded separately from text files
+        TRY_PARSE_JSON($9) AS diagnosis_codes,
+        $10::TIMESTAMP_NTZ AS created_date,
+        $11::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/clinical_notes.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify clinical notes load
+SELECT 'Clinical notes metadata loaded: ' || COUNT(*) AS load_status FROM EPIC.CLINICAL_NOTES;
+
+-- Load radiology reports metadata
+TRUNCATE TABLE EPIC.RADIOLOGY_REPORTS;
+
+COPY INTO EPIC.RADIOLOGY_REPORTS (
+    note_id,
+    patient_id,
+    encounter_id,
+    imaging_study_id,
+    note_type,
+    study_type,
+    note_date,
+    author,
+    department,
+    note_content,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS note_id,
+        $2::VARCHAR(20) AS patient_id,
+        $3::VARCHAR(20) AS encounter_id,
+        $4::VARCHAR(20) AS imaging_study_id,
+        $5::VARCHAR(100) AS note_type,
+        $6::VARCHAR(50) AS study_type,
+        $7::TIMESTAMP_NTZ AS note_date,
+        $8::VARCHAR(200) AS author,
+        $9::VARCHAR(100) AS department,
+        '' AS note_content, -- Will be loaded separately from text files
+        $11::TIMESTAMP_NTZ AS created_date,
+        $12::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/radiology_reports.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify radiology reports load
+SELECT 'Radiology reports metadata loaded: ' || COUNT(*) AS load_status FROM EPIC.RADIOLOGY_REPORTS;
+
+-- =============================================================================
+-- LOAD REFERENCE DATA
+-- =============================================================================
+
+-- Load providers
+TRUNCATE TABLE WORKDAY.PROVIDERS;
+
+COPY INTO WORKDAY.PROVIDERS (
+    provider_id,
+    npi,
+    first_name,
+    last_name,
+    specialty,
+    department,
+    credentials,
+    status,
+    hire_date,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS provider_id,
+        $2::VARCHAR(20) AS npi,
+        $3::VARCHAR(100) AS first_name,
+        $4::VARCHAR(100) AS last_name,
+        $5::VARCHAR(100) AS specialty,
+        $6::VARCHAR(100) AS department,
+        $7::VARCHAR(50) AS credentials,
+        $8::VARCHAR(20) AS status,
+        $9::DATE AS hire_date,
+        $10::TIMESTAMP_NTZ AS created_date,
+        $11::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/providers.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify providers load
+SELECT 'Providers loaded: ' || COUNT(*) AS load_status FROM WORKDAY.PROVIDERS;
+
+-- Load departments
+TRUNCATE TABLE WORKDAY.DEPARTMENTS;
+
+COPY INTO WORKDAY.DEPARTMENTS (
+    department_id,
+    department_name,
+    department_code,
+    service_line,
+    location,
+    status,
+    created_date,
+    updated_date
+)
+FROM (
+    SELECT 
+        $1::VARCHAR(20) AS department_id,
+        $2::VARCHAR(100) AS department_name,
+        $3::VARCHAR(20) AS department_code,
+        $4::VARCHAR(100) AS service_line,
+        $5::VARCHAR(100) AS location,
+        $6::VARCHAR(20) AS status,
+        $7::TIMESTAMP_NTZ AS created_date,
+        $8::TIMESTAMP_NTZ AS updated_date
+    FROM @RAW_DATA.PATIENT_DATA_STAGE/departments.csv
+)
+FILE_FORMAT = CSV_FORMAT
+ON_ERROR = 'CONTINUE';
+
+-- Verify departments load
+SELECT 'Departments loaded: ' || COUNT(*) AS load_status FROM WORKDAY.DEPARTMENTS;
+
+-- =============================================================================
+-- DATA LOADING SUMMARY
+-- =============================================================================
+
+-- Create summary view of loaded data
+CREATE OR REPLACE VIEW RAW_DATA.DATA_LOAD_SUMMARY AS
+SELECT 
+    'Patients' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM EPIC.PATIENTS
+
+UNION ALL
+
+SELECT 
+    'Encounters' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM EPIC.ENCOUNTERS
+
+UNION ALL
+
+SELECT 
+    'Diagnoses' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM EPIC.DIAGNOSES
+
+UNION ALL
+
+SELECT 
+    'Lab Results' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM EPIC.LAB_RESULTS
+
+UNION ALL
+
+SELECT 
+    'Medications' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM EPIC.MEDICATIONS
+
+UNION ALL
+
+SELECT 
+    'Vital Signs' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM EPIC.VITAL_SIGNS
+
+UNION ALL
+
+SELECT 
+    'Imaging Studies' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM EPIC.IMAGING_STUDIES
+
+UNION ALL
+
+SELECT 
+    'Clinical Notes' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM EPIC.CLINICAL_NOTES
+
+UNION ALL
+
+SELECT 
+    'Radiology Reports' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM EPIC.RADIOLOGY_REPORTS
+
+UNION ALL
+
+SELECT 
+    'Providers' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM WORKDAY.PROVIDERS
+
+UNION ALL
+
+SELECT 
+    'Departments' AS table_name,
+    COUNT(*) AS record_count,
+    MIN(created_date) AS earliest_record,
+    MAX(updated_date) AS latest_record
+FROM WORKDAY.DEPARTMENTS
+
+ORDER BY table_name;
+
+-- Display final summary
+SELECT 'Raw data loading complete. Summary:' AS status;
+SELECT * FROM RAW_DATA.DATA_LOAD_SUMMARY;

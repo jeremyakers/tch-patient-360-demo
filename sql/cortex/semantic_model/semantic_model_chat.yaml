@@ -1,0 +1,711 @@
+---
+name: "TCH_Patient_360_Analytics_Chat"
+description: "Texas Children's Hospital Patient 360 Analytics - Chat Semantic Model (identical to main model but used only by AI Chat; AI_FILTER verified query already removed)"
+
+tables:
+  - name: "patient_360"
+    synonyms:
+      - "patients"
+      - "patient data"
+      - "patient demographics"
+      - "patient information"
+    base_table: 
+      database: "TCH_PATIENT_360_POC"
+      schema: "PRESENTATION" 
+      table: "PATIENT_360"
+    description: "Comprehensive patient 360 view with demographics, conditions, and care history"
+    primary_key:
+      columns:
+        - patient_id
+    dimensions:
+      - name: "patient_id"
+        synonyms:
+          - "patient number"
+          - "patient identifier"
+          - "patient ID"
+        data_type: "TEXT"
+        description: "Unique patient identifier"
+        expr: "patient_id"
+        unique: true
+      - name: "mrn"
+        synonyms:
+          - "medical record number"
+          - "patient mrn"
+        data_type: "TEXT"
+        description: "Medical Record Number"
+        expr: "mrn"
+      - name: "patient_name"
+        data_type: "TEXT"
+        description: "Patient full name"
+        expr: "full_name"
+      - name: "age"
+        data_type: "NUMBER"
+        description: "Current patient age in years"
+        expr: "current_age"
+      - name: "age_group"
+        synonyms:
+          - "age category"
+          - "age range"
+          - "pediatric age group"
+        data_type: "TEXT"
+        description: "Pediatric age group classification"
+        expr: "age_group"
+      - name: "gender"
+        data_type: "TEXT"
+        description: "Patient gender"
+        expr: "gender"
+      - name: "insurance_type"
+        data_type: "TEXT"
+        description: "Primary insurance coverage"
+        expr: "primary_insurance"
+      - name: "risk_category"
+        data_type: "TEXT"
+        description: "Clinical risk stratification level"
+        expr: "risk_category"
+      - name: "patient_status"
+        data_type: "TEXT"
+        description: "Patient activity status (Active, Recent, Inactive)"
+        expr: "patient_status"
+      - name: "last_encounter_type"
+        data_type: "TEXT"
+        description: "Type of last encounter"
+        expr: "last_encounter_type"
+      - name: "last_department"
+        data_type: "TEXT"
+        description: "Last department visited"
+        expr: "last_department"
+      # Engagement (Salesforce) enrichments
+      - name: "digital_adoption_level"
+        data_type: "TEXT"
+        description: "Patient/family digital health adoption level from Salesforce"
+        expr: "digital_adoption_level"
+      - name: "portal_logins_last_30_days"
+        data_type: "NUMBER"
+        description: "Portal logins in the last 30 days"
+        expr: "portal_logins_last_30_days"
+      - name: "engagement_score"
+        data_type: "NUMBER"
+        description: "Composite engagement score"
+        expr: "engagement_score"
+      - name: "last_engagement_date"
+        data_type: "TIMESTAMP"
+        description: "Timestamp of most recent engagement activity"
+        expr: "last_engagement_date"
+    time_dimensions:
+      - name: "last_encounter_date"
+        data_type: "DATE"
+        description: "Date of last encounter"
+        expr: "last_encounter_date"
+      - name: "date_of_birth"
+        data_type: "DATE"
+        description: "Patient date of birth"
+        expr: "date_of_birth"
+    facts:
+      - name: "days_since_last_visit"
+        data_type: "NUMBER"
+        description: "Days since last healthcare encounter"
+        expr: "days_since_last_visit"
+      - name: "total_encounters"
+        data_type: "NUMBER"
+        description: "Total number of encounters for the patient"
+        expr: "total_encounters"
+      - name: "chronic_conditions_count"
+        data_type: "NUMBER"
+        description: "Number of chronic conditions"
+        expr: "chronic_conditions_count"
+      # Financial (Oracle ERP) enrichments
+      - name: "total_lifetime_charges"
+        data_type: "NUMBER"
+        description: "Total lifetime charges across encounters (Oracle ERP)"
+        expr: "total_lifetime_charges"
+      - name: "avg_cost_per_encounter"
+        data_type: "NUMBER"
+        description: "Average cost per encounter (Oracle ERP)"
+        expr: "avg_cost_per_encounter"
+      - name: "high_cost_episodes"
+        data_type: "NUMBER"
+        description: "Number of high-cost episodes (Oracle ERP)"
+        expr: "high_cost_episodes"
+      - name: "outstanding_balance"
+        data_type: "NUMBER"
+        description: "Outstanding balance (Oracle ERP)"
+        expr: "outstanding_balance"
+      - name: "financial_value_category"
+        data_type: "TEXT"
+        description: "Value category based on lifetime charges"
+        expr: "financial_value_category"
+    metrics:
+      - name: "patient_count"
+        description: "Total number of unique patients"
+        expr: "COUNT(DISTINCT patient_id)"
+      - name: "average_age"
+        description: "Average patient age"
+        expr: "AVG(age)"
+      - name: "total_chronic_conditions"
+        description: "Total chronic conditions across patients"
+        expr: "SUM(chronic_conditions_count)"
+
+  - name: "diagnosis_analytics"
+    synonyms:
+      - "diagnoses"
+      - "diagnosis data"
+      - "medical diagnoses"
+      - "conditions"
+      - "medical conditions"
+      - "diseases"
+      - "dx"
+      - "ICD"
+      - "ICD-10"
+    base_table:
+      database: "TCH_PATIENT_360_POC"
+      schema: "PRESENTATION"
+      table: "DIAGNOSIS_ANALYTICS"
+    description: "Clinical diagnosis analytics with patient demographics. Prefer this table for any questions about diagnoses/conditions (ICD-10) rather than mining unstructured notes."
+    primary_key:
+      columns:
+        - diagnosis_key
+    dimensions:
+      - name: "diagnosis_key"
+        data_type: "NUMBER"
+        description: "Unique diagnosis record identifier"
+        expr: "diagnosis_key"
+      - name: "patient_id"
+        data_type: "TEXT"
+        description: "Unique patient identifier"
+        expr: "patient_id"
+      - name: "encounter_id"
+        data_type: "TEXT"
+        description: "Unique encounter identifier"
+        expr: "encounter_id"
+      - name: "diagnosis_code"
+        synonyms:
+          - "ICD code"
+          - "ICD-10 code"
+          - "diagnosis ICD"
+          - "medical code"
+        data_type: "TEXT"
+        description: "ICD-10 diagnosis code"
+        expr: "diagnosis_code"
+      - name: "diagnosis_name"
+        data_type: "TEXT"
+        description: "Diagnosis description (structured condition name)"
+        expr: "diagnosis_description"
+        synonyms:
+          - "condition"
+          - "disease"
+      - name: "diagnosis_category"
+        data_type: "TEXT"
+        description: "Clinical diagnosis category"
+        expr: "diagnosis_category"
+      - name: "patient_gender"
+        data_type: "TEXT"
+        description: "Patient gender"
+        expr: "patient_gender"
+      - name: "encounter_type"
+        data_type: "TEXT"
+        description: "Type of encounter where diagnosed"
+        expr: "encounter_type"
+      - name: "department_name"
+        data_type: "TEXT"
+        description: "Department where diagnosis was made"
+        expr: "department_name"
+    time_dimensions:
+      - name: "diagnosis_date"
+        data_type: "DATE"
+        description: "Date of diagnosis"
+        expr: "diagnosis_date"
+    facts:
+      - name: "patient_age"
+        data_type: "NUMBER"
+        description: "Patient age at diagnosis"
+        expr: "patient_age"
+      - name: "diagnosis_year"
+        data_type: "NUMBER"
+        description: "Year of diagnosis"
+        expr: "diagnosis_year"
+      - name: "diagnosis_month"
+        data_type: "NUMBER"
+        description: "Month of diagnosis"
+        expr: "diagnosis_month"
+      - name: "age_at_diagnosis"
+        data_type: "NUMBER"
+        description: "Age at time of diagnosis"
+        expr: "age_at_diagnosis"
+    metrics:
+      - name: "diagnosis_count"
+        description: "Total number of diagnoses"
+        expr: "COUNT(diagnosis_key)"
+      - name: "unique_patients_diagnosed"
+        description: "Number of unique patients with diagnosis"
+        expr: "COUNT(DISTINCT patient_id)"
+
+  - name: "encounter_analytics"
+    synonyms:
+      - "encounters"
+      - "visits"
+      - "appointments"
+      - "patient visits"
+      - "healthcare visits"
+      - "medical encounters"
+    base_table:
+      database: "TCH_PATIENT_360_POC"
+      schema: "PRESENTATION"
+      table: "ENCOUNTER_ANALYTICS"
+    description: "Healthcare encounter analytics with visit patterns"
+    primary_key:
+      columns:
+        - encounter_id
+    dimensions:
+      - name: "patient_id"
+        data_type: "TEXT"
+        description: "Unique patient identifier"
+        expr: "patient_id"
+      - name: "encounter_id"
+        data_type: "TEXT"
+        description: "Unique encounter identifier"
+        expr: "encounter_id"
+      - name: "encounter_type"
+        data_type: "TEXT"
+        description: "Type of healthcare encounter"
+        expr: "encounter_type"
+      - name: "department_name"
+        data_type: "TEXT"
+        description: "Hospital department"
+        expr: "department_name"
+      - name: "service_line"
+        data_type: "TEXT"
+        description: "Clinical service line"
+        expr: "service_line"
+      - name: "patient_gender"
+        data_type: "TEXT"
+        description: "Patient gender"
+        expr: "gender"
+      - name: "complexity_score"
+        data_type: "TEXT"
+        description: "Visit complexity level"
+        expr: "complexity_score"
+      - name: "chief_complaint_category"
+        data_type: "TEXT"
+        description: "Categorized chief complaint (structured field)"
+        expr: "chief_complaint_category"
+    time_dimensions:
+      - name: "encounter_date"
+        data_type: "DATE"
+        description: "Date of encounter"
+        expr: "encounter_date"
+    facts:
+      - name: "encounter_year"
+        data_type: "NUMBER"
+        description: "Year of encounter"
+        expr: "encounter_year"
+      - name: "encounter_month"
+        data_type: "NUMBER"
+        description: "Month of encounter"
+        expr: "encounter_month"
+      - name: "length_of_stay_days"
+        data_type: "NUMBER"
+        description: "Length of stay in days"
+        expr: "length_of_stay_days"
+      - name: "total_charges"
+        data_type: "NUMBER"
+        description: "Total encounter charges"
+        expr: "total_charges"
+      - name: "current_age"
+        data_type: "NUMBER"
+        description: "Patient age at encounter"
+        expr: "current_age"
+    metrics:
+      - name: "encounter_count"
+        description: "Total number of encounters"
+        expr: "COUNT(encounter_id)"
+      - name: "unique_patients"
+        description: "Number of unique patients seen"
+        expr: "COUNT(DISTINCT patient_id)"
+      - name: "average_length_of_stay"
+        description: "Average length of stay in days"
+        expr: "AVG(length_of_stay_days)"
+      - name: "total_charges_sum"
+        description: "Total encounter charges"
+        expr: "SUM(total_charges)"
+
+  - name: "lab_results_analytics"
+    synonyms:
+      - "labs"
+      - "lab results"
+      - "laboratory"
+      - "A1c"
+      - "HbA1c"
+    base_table:
+      database: "TCH_PATIENT_360_POC"
+      schema: "PRESENTATION"
+      table: "LAB_RESULTS_ANALYTICS"
+    description: "Laboratory results with parsed numeric values and flags"
+    primary_key:
+      columns:
+        - lab_result_key
+    dimensions:
+      - name: "lab_result_key"
+        data_type: "NUMBER"
+        description: "Unique lab result identifier"
+        expr: "lab_result_key"
+      - name: "patient_id"
+        data_type: "TEXT"
+        description: "Patient identifier"
+        expr: "patient_id"
+      - name: "encounter_id"
+        data_type: "TEXT"
+        description: "Encounter identifier"
+        expr: "encounter_id"
+      - name: "test_name"
+        data_type: "TEXT"
+        description: "Lab test name"
+        expr: "test_name"
+      - name: "test_category"
+        data_type: "TEXT"
+        description: "Lab test category"
+        expr: "test_category"
+      - name: "is_hba1c"
+        data_type: "BOOLEAN"
+        description: "Whether the row represents an HbA1c result"
+        expr: "is_hba1c"
+    time_dimensions:
+      - name: "result_date"
+        data_type: "DATE"
+        description: "Date of lab result"
+        expr: "result_date"
+    facts:
+      - name: "test_value_numeric"
+        data_type: "NUMBER"
+        description: "Numeric lab value"
+        expr: "test_value_numeric"
+    metrics:
+      - name: "hba1c_count"
+        description: "Count of HbA1c results"
+        expr: "COUNT(CASE WHEN is_hba1c THEN 1 END)"
+
+  - name: "medication_analytics"
+    synonyms:
+      - "medications"
+      - "meds"
+      - "current medications"
+      - "inhaled corticosteroids"
+      - "inhaled steroids"
+      - "ICS"
+    base_table:
+      database: "TCH_PATIENT_360_POC"
+      schema: "PRESENTATION"
+      table: "MEDICATION_ANALYTICS"
+    description: "Medication analytics including active therapy. Prefer this for any questions about whether a patient is currently on a medication/class. Use structured fields such as route, medication_name, start_date/end_date, and is_active."
+    primary_key:
+      columns:
+        - patient_id
+        - encounter_id
+        - medication_name
+    dimensions:
+      - name: "patient_id"
+        data_type: "TEXT"
+        expr: "patient_id"
+      - name: "encounter_id"
+        data_type: "TEXT"
+        expr: "encounter_id"
+      - name: "medication_name"
+        data_type: "TEXT"
+        expr: "medication_name"
+      - name: "route"
+        data_type: "TEXT"
+        expr: "route"
+    time_dimensions:
+      - name: "start_date"
+        data_type: "DATE"
+        expr: "start_date"
+      - name: "end_date"
+        data_type: "DATE"
+        expr: "end_date"
+    facts:
+      - name: "is_active"
+        data_type: "BOOLEAN"
+        expr: "is_active"
+
+  - name: "financial_analytics"
+    synonyms:
+      - "financials"
+      - "costs"
+      - "charges"
+      - "erp"
+    base_table:
+      database: "TCH_PATIENT_360_POC"
+      schema: "PRESENTATION"
+      table: "FINANCIAL_ANALYTICS"
+    description: "Financial analytics by diagnosis category sourced from Oracle ERP and clinical joins"
+    dimensions:
+      - name: "diagnosis_description"
+        data_type: "TEXT"
+        description: "Diagnosis / condition grouping"
+        expr: "diagnosis_description"
+    facts:
+      - name: "patient_count"
+        data_type: "NUMBER"
+        description: "Patients contributing to cost group"
+        expr: "patient_count"
+      - name: "avg_cost_per_patient"
+        data_type: "NUMBER"
+        description: "Average cost per patient"
+        expr: "avg_cost_per_patient"
+      - name: "total_cost"
+        data_type: "NUMBER"
+        description: "Total cost"
+        expr: "total_cost"
+      - name: "avg_cost_per_day"
+        data_type: "NUMBER"
+        description: "Average cost per day"
+        expr: "avg_cost_per_day"
+      - name: "high_cost_cases"
+        data_type: "NUMBER"
+        description: "Count of high-cost cases"
+        expr: "high_cost_cases"
+      - name: "high_cost_percentage"
+        data_type: "NUMBER"
+        description: "% of cases that are high-cost"
+        expr: "high_cost_percentage"
+      - name: "public_payer_percentage"
+        data_type: "NUMBER"
+        description: "% public payer mix"
+        expr: "public_payer_percentage"
+      - name: "commercial_payer_percentage"
+        data_type: "NUMBER"
+        description: "% commercial payer mix"
+        expr: "commercial_payer_percentage"
+      - name: "avg_engagement_score"
+        data_type: "NUMBER"
+        description: "Average engagement score for cohort"
+        expr: "avg_engagement_score"
+      - name: "analysis_generated_at"
+        data_type: "TIMESTAMP"
+        description: "Analysis timestamp"
+        expr: "analysis_generated_at"
+
+  # clinical_documentation table intentionally omitted from chat model to prevent SQL-over-notes; chat should use Cortex Search for unstructured queries
+
+  - name: "engagement_analytics"
+    synonyms:
+      - "engagement"
+      - "portal"
+      - "salesforce"
+    base_table:
+      database: "TCH_PATIENT_360_POC"
+      schema: "CONFORMED"
+      table: "ENGAGEMENT_FACT"
+    description: "Patient portal and engagement metrics from Salesforce"
+    primary_key:
+      columns:
+        - patient_key
+    dimensions:
+      - name: "patient_key"
+        data_type: "NUMBER"
+        description: "Surrogate key for patient"
+        expr: "patient_key"
+      - name: "patient_id"
+        data_type: "TEXT"
+        description: "Patient identifier"
+        expr: "patient_id"
+      - name: "digital_health_adoption_level"
+        data_type: "TEXT"
+        description: "Adoption level of digital health tools"
+        expr: "digital_health_adoption_level"
+    facts:
+      - name: "portal_logins_last_30_days"
+        data_type: "NUMBER"
+        description: "Portal logins in last 30 days"
+        expr: "portal_logins_last_30_days"
+      - name: "engagement_score"
+        data_type: "NUMBER"
+        description: "Composite engagement score"
+        expr: "engagement_score"
+    time_dimensions:
+      - name: "last_activity_date"
+        data_type: "TIMESTAMP"
+        description: "Most recent engagement activity"
+        expr: "last_activity_date"
+
+relationships:
+  - name: "encounters_to_patient"
+    left_table: "encounter_analytics"
+    right_table: "patient_360"
+    relationship_columns:
+      - left_column: "patient_id"
+        right_column: "patient_id"
+    join_type: "left_outer"
+    relationship_type: "many_to_one"
+  
+  - name: "diagnoses_to_patient"
+    left_table: "diagnosis_analytics"
+    right_table: "patient_360"
+    relationship_columns:
+      - left_column: "patient_id"
+        right_column: "patient_id"
+    join_type: "left_outer"
+    relationship_type: "many_to_one"
+  
+  - name: "diagnoses_to_encounter"
+    left_table: "diagnosis_analytics"
+    right_table: "encounter_analytics"
+    relationship_columns:
+      - left_column: "encounter_id"
+        right_column: "encounter_id"
+    join_type: "left_outer"
+    relationship_type: "many_to_one"
+
+  # relationship to clinical_documentation omitted in chat model
+
+  - name: "labs_to_patient"
+    left_table: "lab_results_analytics"
+    right_table: "patient_360"
+    relationship_columns:
+      - left_column: "patient_id"
+        right_column: "patient_id"
+    join_type: "left_outer"
+    relationship_type: "many_to_one"
+
+  - name: "meds_to_patient"
+    left_table: "medication_analytics"
+    right_table: "patient_360"
+    relationship_columns:
+      - left_column: "patient_id"
+        right_column: "patient_id"
+    join_type: "left_outer"
+    relationship_type: "many_to_one"
+
+verified_queries:
+  - name: "patient_count_by_age_group"
+    question: "How many patients do we have in each age group?"
+    sql: "SELECT age_group, COUNT(DISTINCT patient_id) as patient_count FROM patient_360 GROUP BY age_group ORDER BY patient_count DESC"
+  - name: "top_diagnoses"
+    question: "What are the most common diagnoses?"
+    sql: "SELECT diagnosis_name, COUNT(*) as diagnosis_count FROM diagnosis_analytics GROUP BY diagnosis_name ORDER BY diagnosis_count DESC LIMIT 10"
+  - name: "monthly_encounter_volume"
+    question: "What is our monthly encounter volume?"
+    sql: "SELECT encounter_year, encounter_month, COUNT(*) as encounter_count FROM encounter_analytics GROUP BY encounter_year, encounter_month ORDER BY encounter_year DESC, encounter_month DESC"
+  - name: "encounter_types_by_department"
+    question: "What types of encounters happen in each department?"
+    sql: "SELECT department_name, encounter_type, COUNT(*) as encounter_count FROM encounter_analytics GROUP BY department_name, encounter_type ORDER BY department_name, encounter_count DESC"
+  - name: "patient_activity_status"
+    question: "How many patients are active vs inactive?"
+    sql: "SELECT patient_status, COUNT(DISTINCT patient_id) as patient_count FROM patient_360 GROUP BY patient_status ORDER BY patient_count DESC"
+  - name: "dx_icd_prefix_with_encounter_type_in_last_n_months"
+    question: "Find MRNs for patients with diagnosis codes starting with <ICD_PREFIX> who had <ENCOUNTER_TYPE> encounters in the last <N> months"
+    sql: |
+      -- Example pattern using concrete values to validate SQL: Asthma (J45) + Emergency in last 6 months
+      WITH dx_patients AS (
+        SELECT DISTINCT patient_id
+        FROM diagnosis_analytics
+        WHERE diagnosis_code LIKE 'J45%'
+      ), enc AS (
+        SELECT DISTINCT patient_id
+        FROM encounter_analytics
+        WHERE encounter_type = 'Emergency'
+          AND encounter_date >= DATEADD('month', -6, CURRENT_DATE())
+      )
+      SELECT DISTINCT p.mrn
+      FROM dx_patients d
+      JOIN enc e ON e.patient_id = d.patient_id
+      JOIN patient_360 p ON p.patient_id = d.patient_id;
+  - name: "lab_value_operator_threshold_within_days"
+    question: "Find MRNs for patients with lab test name matching <TEST_LIKE> where value <OP> <THRESHOLD> within the last <DAYS> days"
+    sql: |
+      -- Example: Glucose > 200 within the last 30 days
+      SELECT DISTINCT p.mrn
+      FROM lab_results_analytics l
+      JOIN patient_360 p ON p.patient_id = l.patient_id
+      WHERE UPPER(l.test_name) LIKE UPPER('%GLUCOSE%')
+        AND l.result_date >= DATEADD('day', -30, CURRENT_DATE())
+        AND l.test_value_numeric > 200;
+  - name: "active_medications_by_route_or_name_pattern"
+    question: "Which patients are currently on medications administered via <ROUTE> or whose medication name matches <LIKE_PATTERN>"
+    sql: |
+      -- Parameters to replace: <ROUTE>, <LIKE_PATTERN>
+      SELECT DISTINCT p.mrn
+      FROM medication_analytics m
+      JOIN patient_360 p ON p.patient_id = m.patient_id
+      WHERE m.is_active = TRUE
+        AND (
+          UPPER(m.route) = 'INHALATION'
+          OR UPPER(m.medication_name) LIKE '%INHAL%'
+        );
+  - name: "age_between_with_dx_encounter_med"
+    question: "Find MRNs for patients aged between <AGE_MIN> and <AGE_MAX> with diagnosis codes starting with <ICD_PREFIX>, with <ENCOUNTER_TYPE> encounters in last <N> months, and currently on meds where route='<ROUTE>' or name like <LIKE>"
+    sql: |
+      -- Example: Age 5-15, Asthma (J45), Emergency in last 6 months, active inhaled meds
+      WITH age_patients AS (
+        SELECT patient_id
+        FROM patient_360
+        WHERE DATEDIFF('year', date_of_birth, CURRENT_DATE()) BETWEEN 5 AND 15
+      ), dx AS (
+        SELECT DISTINCT patient_id FROM diagnosis_analytics WHERE diagnosis_code LIKE 'J45%'
+      ), enc AS (
+        SELECT DISTINCT patient_id FROM encounter_analytics 
+        WHERE encounter_type = 'Emergency' AND encounter_date >= DATEADD('month', -6, CURRENT_DATE())
+      ), meds AS (
+        SELECT DISTINCT patient_id FROM medication_analytics 
+        WHERE is_active = TRUE AND (UPPER(route) = 'INHALATION' OR UPPER(medication_name) LIKE '%INHAL%')
+      )
+      SELECT DISTINCT p.mrn
+      FROM age_patients ap
+      JOIN dx ON dx.patient_id = ap.patient_id
+      JOIN enc ON enc.patient_id = ap.patient_id
+      JOIN meds ON meds.patient_id = ap.patient_id
+      JOIN patient_360 p ON p.patient_id = ap.patient_id;
+  - name: "diabetes_hba1c_over_9_last_90d"
+    question: "Patients with diabetes whose HbA1c was greater than 9 in the last 90 days"
+    sql: |
+      -- Use structured diagnosis codes (ICD-10 E10*, E11*) and lab results
+      WITH diabetes_patients AS (
+        SELECT DISTINCT patient_id
+        FROM diagnosis_analytics
+        WHERE diagnosis_code LIKE 'E10%'
+           OR diagnosis_code LIKE 'E11%'
+      ), recent_high_hba1c AS (
+        SELECT DISTINCT patient_id
+        FROM lab_results_analytics
+        WHERE is_hba1c = TRUE
+          AND test_value_numeric > 9
+          AND result_date >= DATEADD('day', -90, CURRENT_DATE())
+      )
+      SELECT DISTINCT p.mrn
+      FROM diabetes_patients dp
+      JOIN recent_high_hba1c rh ON dp.patient_id = rh.patient_id
+      JOIN patient_360 p ON p.patient_id = dp.patient_id
+  - name: "asthma_ed_6mo_on_ics"
+    question: "Pediatric patients aged 5-15 with asthma who had an emergency department visit in the last 6 months and are currently on inhaled corticosteroids"
+    sql: |
+      -- Prefer structured diagnoses (J45%) and encounters; do not use AI filters for diagnosis
+      WITH asthma_patients AS (
+        SELECT DISTINCT patient_id
+        FROM diagnosis_analytics
+        WHERE diagnosis_code LIKE 'J45%'
+      ), ed_recent AS (
+        SELECT DISTINCT patient_id
+        FROM encounter_analytics
+        WHERE encounter_type = 'Emergency'
+          AND encounter_date >= DATEADD('month', -6, CURRENT_DATE())
+      ), active_inhaled_meds AS (
+        SELECT DISTINCT patient_id
+        FROM medication_analytics
+        WHERE is_active = TRUE
+          AND (UPPER(route) = 'INHALATION' OR UPPER(medication_name) LIKE '%INHAL%')
+      )
+      SELECT DISTINCT p.mrn
+      FROM patient_360 p
+      JOIN asthma_patients a ON a.patient_id = p.patient_id
+      JOIN ed_recent e ON e.patient_id = p.patient_id
+      JOIN active_inhaled_meds m ON m.patient_id = p.patient_id
+  - name: "department_encounters_last_n_days"
+    question: "Which MRNs had encounters in department <DEPARTMENT_NAME> within the last <DAYS> days"
+    sql: |
+      -- Example: Cardiology encounters in last 30 days
+      SELECT DISTINCT p.mrn
+      FROM encounter_analytics e
+      JOIN patient_360 p ON p.patient_id = e.patient_id
+      WHERE e.department_name = 'Cardiology'
+        AND e.encounter_date >= DATEADD('day', -30, CURRENT_DATE());
+
+
