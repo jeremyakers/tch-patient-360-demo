@@ -4,21 +4,32 @@ This repository packages the Texas Children's Hospital Patient 360 PoC for zero�
 
 ## Quick start (Snowsight Workspaces – recommended)
 
-1) Create a Git Workspace
+1) Create a Git API Integration (prerequisite)
+- Run as ACCOUNTADMIN (or equivalent) to enable Git over HTTPS
+- See Snowflake docs: https://docs.snowflake.com/en/developer-guide/git/git-setting-up#label-git-setup-no-auth
+
+```sql
+CREATE OR REPLACE API INTEGRATION TCH_GIT_API
+  API_PROVIDER = git_https_api
+  API_ALLOWED_PREFIXES = ("https://github.com/jeremyakers")
+  ENABLED = TRUE;
+```
+
+2) Create a Git Workspace
 - In Snowsight: Projects → Workspaces → From Git repository
 - Repository URL: your Git URL (for example, `https://github.com/jeremyakers/tch-patient-360-demo`)
 - Choose your API Integration and auth (OAuth2 or PAT)
 - Select the branch (for example, `main`)
 - Ref: Snowflake docs – Create a Git workspace: https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces#label-create-a-git-workspace
 
-2) Open and run the orchestrator
+3) Open and run the orchestrator
 - Open `sql/00_master.sql` in the Workspace
 - Set parameters as needed near the top:
   - `data_size` → `small|medium|large`
   - `enable_git_mode` → `false` to execute the Workspace file itself (edits run directly)
 - Click Run All
 
-3) Optional: Git‑orchestrated mode (executes from a Snowflake Git repository object)
+4) Optional: Git‑orchestrated mode (executes from a Snowflake Git repository object)
 - If your Snowflake admin created a Git repository object (with FETCH configured), set at the top of `sql/00_master.sql`:
   - `enable_git_mode = true`
   - Configure `git_db`, `git_schema`, `git_repo_name`, `git_ref_type`, `git_ref_name`
@@ -27,7 +38,7 @@ This repository packages the Texas Children's Hospital Patient 360 PoC for zero�
   - Create and execute the Notebook from the Git path
   - Create the Streamlit app from the Git path
 
-4) Verify
+5) Verify
 - Run `sql/99_verification.sql` for a consolidated validation of raw loads, dynamic tables, and Cortex services.
 
 ## What gets deployed
