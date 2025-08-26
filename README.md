@@ -61,7 +61,7 @@ GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE TCH_PATIENT_360_ROLE;
 
 - In Snowsight: Projects → Workspaces → From Git repository
 - Repository URL: your Git URL (for example, `https://github.com/jeremyakers/tch-patient-360-demo`)
-- Choose your API Integration and auth (OAuth2 or PAT)
+- Choose the API Integration created in the Account Admin steps above.
 - Select the branch (for example, `main`)
 - Ref: Snowflake docs – Create a Git workspace: https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces#label-create-a-git-workspace
 
