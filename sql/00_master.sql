@@ -45,6 +45,13 @@ EXECUTE IMMEDIATE $$
     CREATE SCHEMA IF NOT EXISTS AI_ML;
 $$;
 
+-- Git repository clone (placed in RAW_DATA). Requires API INTEGRATION GIT and USAGE granted to your role.
+EXECUTE IMMEDIATE $$ USE SCHEMA RAW_DATA; $$;
+CREATE OR REPLACE GIT REPOSITORY IDENTIFIER($git_repo_name)
+  ORIGIN = 'https://github.com/jeremyakers/tch-patient-360-demo'
+  API_INTEGRATION = GIT;
+ALTER GIT REPOSITORY IDENTIFIER($git_repo_name) FETCH;
+
 -------------------------------------------------------------------------------
 -- Execute step scripts from Workspace (preferred for customization)
 -------------------------------------------------------------------------------
