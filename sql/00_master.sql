@@ -117,7 +117,7 @@ EXECUTE IMMEDIATE $stmt;
 -- Copy YAMLs using PATTERN (see Snowflake COPY FILES docs)
 SET stmt = 'COPY FILES INTO @TCH_PATIENT_360_POC.AI_ML.SEMANTIC_MODEL_STAGE '
         || 'FROM ' || $repo_path || '/sql/cortex/semantic_model/ '
-        || 'PATTERN = ''^semantic_model(_chat)?\\.yaml$''';
+        || 'PATTERN=''.*[.]yaml$'' DETAILED_OUTPUT=TRUE';
 EXECUTE IMMEDIATE $stmt;
 
 -------------------------------------------------------------------------------
