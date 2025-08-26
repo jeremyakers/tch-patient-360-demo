@@ -57,7 +57,6 @@ ALTER GIT REPOSITORY IDENTIFIER($git_repo_name) FETCH;
 EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/01_database_setup.sql';
 EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/02_raw_tables.sql';
 EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/03_conformed_tables.sql';
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/04_presentation_tables.sql';
 
 -------------------------------------------------------------------------------
 -- Generate staged data via Snowflake Notebook (run before data load)
@@ -81,6 +80,9 @@ EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/ver
 
 EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/01_patient_dynamic_tables.sql';
 EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/02_clinical_dynamic_tables.sql';
+
+-- Presentation layer after dynamic tables are created
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/04_presentation_tables.sql';
 
 EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/01_cortex_analyst_setup.sql';
 EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/02_cortex_search_setup.sql';
