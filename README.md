@@ -6,6 +6,11 @@ This repository packages the Texas Children's Hospital Patient 360 PoC for zeroâ
 
 1) Prerequisite steps to be taken by Account Admin:
 
+Note: The Git repository clone is created automatically by sql/00_master.sql in schema RAW_DATA (requires existing API INTEGRATION GIT).
+1) Prerequisite steps to be taken by Account Admin:
+
+Note: The Git repository clone is created automatically by sql/00_master.sql in schema RAW_DATA (requires existing API INTEGRATION GIT).
+
 ```sql
 USE ROLE ACCOUNTADMIN;
 CREATE ROLE IF NOT EXISTS TCH_PATIENT_360_ROLE;
