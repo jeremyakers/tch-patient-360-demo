@@ -59,20 +59,10 @@ EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/ver
 EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/03_conformed_tables.sql';
 EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/04_presentation_tables.sql';
 
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/data_load/01_load_raw_data.sql';
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/data_load/02_load_unstructured_data.sql';
-
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/01_patient_dynamic_tables.sql';
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/02_clinical_dynamic_tables.sql';
-
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/01_cortex_analyst_setup.sql';
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/02_cortex_search_setup.sql';
-
 -------------------------------------------------------------------------------
--- Data generation via Snowflake Notebook (already in-account Python execution)
+-- Generate staged data via Snowflake Notebook (run before data load)
 -------------------------------------------------------------------------------
 
--- Create the Notebook from the Git repository object, then execute it
 -- Optional: fetch latest commit for the configured ref
 -- ALTER GIT REPOSITORY IDENTIFIER($git_db || '.' || $git_schema || '.' || $git_repo_name) FETCH;
 
@@ -81,6 +71,19 @@ CREATE OR REPLACE NOTEBOOK AI_ML.TCH_DATA_GENERATOR
     MAIN_FILE = 'tch_data_generator.ipynb';
 
 EXECUTE NOTEBOOK AI_ML.TCH_DATA_GENERATOR( 'data_size=' || $data_size, 'parallel=true' );
+
+-------------------------------------------------------------------------------
+-- Data load (structured + unstructured) after notebook generates files
+-------------------------------------------------------------------------------
+
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/data_load/01_load_raw_data.sql';
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/data_load/02_load_unstructured_data.sql';
+
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/01_patient_dynamic_tables.sql';
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/02_clinical_dynamic_tables.sql';
+
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/01_cortex_analyst_setup.sql';
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/02_cortex_search_setup.sql';
 
 -------------------------------------------------------------------------------
 -- Streamlit app creation directly from Git repo object (no manual staging)
