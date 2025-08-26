@@ -21,7 +21,7 @@ SET data_size = 'medium';              -- small|medium|large (affects Notebook g
 -- Workspace settings (preferred execution source)
 -- Snowsight Workspace location (DB and schema are fixed as USER$.PUBLIC)
 SET workspace_name = 'tch-patient-360-demo';
-SET workspace_root = 'snow://workspace/USER$.PUBLIC.' || QUOTE_IDENT($workspace_name) || '/versions/live';
+SET workspace_root = 'snow://workspace/USER$.PUBLIC."' || $workspace_name || '"/versions/live';
 SET git_db = 'TCH_PATIENT_360_POC';    -- database of the Git repository object
 SET git_schema = 'RAW_DATA';           -- schema of the Git repository object
 SET git_repo_name = 'TCH_P360_REPO';   -- name of the Git repository object
