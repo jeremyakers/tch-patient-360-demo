@@ -54,23 +54,27 @@ ALTER GIT REPOSITORY IDENTIFIER($git_repo_name) FETCH;
 -- Execute step scripts from Workspace (preferred for customization)
 -------------------------------------------------------------------------------
 
--- Setup & structure from live Workspace files
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/01_database_setup.sql' );
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/02_raw_tables.sql' );
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/03_conformed_tables.sql' );
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/04_presentation_tables.sql' );
+BEGIN
+    LET ws STRING := $workspace_root;
 
--- Data load (structured + unstructured)
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/data_load/01_load_raw_data.sql' );
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/data_load/02_load_unstructured_data.sql' );
+    -- Setup & structure from live Workspace files
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/setup/01_database_setup.sql' );
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/setup/02_raw_tables.sql' );
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/setup/03_conformed_tables.sql' );
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/setup/04_presentation_tables.sql' );
 
--- Dynamic tables
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/dynamic_tables/01_patient_dynamic_tables.sql' );
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql' );
+    -- Data load (structured + unstructured)
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/data_load/01_load_raw_data.sql' );
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/data_load/02_load_unstructured_data.sql' );
 
--- Cortex services (Analyst + Search)
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/cortex/01_cortex_analyst_setup.sql' );
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/cortex/02_cortex_search_setup.sql' );
+    -- Dynamic tables
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/dynamic_tables/01_patient_dynamic_tables.sql' );
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql' );
+
+    -- Cortex services (Analyst + Search)
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/cortex/01_cortex_analyst_setup.sql' );
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/cortex/02_cortex_search_setup.sql' );
+END;
 
 -------------------------------------------------------------------------------
 -- Data generation via Snowflake Notebook (already in-account Python execution)
@@ -100,7 +104,10 @@ CREATE OR REPLACE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP
 -- Verification
 -------------------------------------------------------------------------------
 
-EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/99_verification.sql' );
+BEGIN
+    LET ws STRING := $workspace_root;
+    EXECUTE IMMEDIATE FROM ( ws || '/sql/99_verification.sql' );
+END;
 
 SELECT 'Orchestration completed.' AS status,
        $data_size AS data_size;
