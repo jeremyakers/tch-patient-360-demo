@@ -4,15 +4,55 @@ This repository packages the Texas Children's Hospital Patient 360 PoC for zero�
 
 ## Quick start (Snowsight Workspaces – recommended)
 
-1) Create a Git API Integration (prerequisite)
-- Run as ACCOUNTADMIN (or equivalent) to enable Git over HTTPS
-- See Snowflake docs: https://docs.snowflake.com/en/developer-guide/git/git-setting-up#label-git-setup-no-auth
+1) Prerequisite steps to be taken by Account Admin:
 
 ```sql
-CREATE OR REPLACE API INTEGRATION TCH_GIT_API
-  API_PROVIDER = git_https_api
-  API_ALLOWED_PREFIXES = ("https://github.com/jeremyakers")
-  ENABLED = TRUE;
+USE ROLE ACCOUNTADMIN;
+CREATE ROLE IF NOT EXISTS TCH_PATIENT_360_ROLE;
+GRANT ROLE TCH_PATIENT_360_ROLE TO USER <YOUR USERNAME HERE>;
+GRANT APPLICATION ROLE SNOWFLAKE.EVENTS_VIEWER TO ROLE TCH_PATIENT_360_ROLE;
+GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE TCH_PATIENT_360_ROLE;
+
+CREATE OR REPLACE API INTEGRATION GIT
+    api_provider = git_https_api
+    api_allowed_prefixes = ('*.github.com', 'https://github.com')
+    enabled = true
+    allowed_authentication_secrets = all;
+
+GRANT USAGE ON INTEGRATION GIT TO ROLE TCH_PATIENT_360_ROLE;
+
+CREATE OR REPLACE WAREHOUSE TCH_COMPUTE_WH
+    WAREHOUSE_SIZE = 'MEDIUM'
+    AUTO_SUSPEND = 60
+    AUTO_RESUME = TRUE
+    INITIALLY_SUSPENDED = TRUE
+    COMMENT = 'General compute warehouse for data processing and transformations';
+
+CREATE OR REPLACE WAREHOUSE TCH_ANALYTICS_WH
+    WAREHOUSE_SIZE = 'LARGE'
+    AUTO_SUSPEND = 300
+    AUTO_RESUME = TRUE
+    INITIALLY_SUSPENDED = TRUE
+    COMMENT = 'Analytics warehouse for heavy analytical workloads and reporting';
+
+CREATE OR REPLACE WAREHOUSE TCH_AI_ML_WH
+    WAREHOUSE_SIZE = 'MEDIUM'
+    AUTO_SUSPEND = 180
+    AUTO_RESUME = TRUE
+    INITIALLY_SUSPENDED = TRUE
+    COMMENT = 'Warehouse for AI/ML workloads including Cortex functions';
+
+-- Grant warehouse usage and ownership to the PoC role
+GRANT OWNERSHIP ON WAREHOUSE TCH_COMPUTE_WH TO ROLE TCH_PATIENT_360_ROLE;
+GRANT OWNERSHIP ON WAREHOUSE TCH_ANALYTICS_WH TO ROLE TCH_PATIENT_360_ROLE;
+GRANT OWNERSHIP ON WAREHOUSE TCH_AI_ML_WH TO ROLE TCH_PATIENT_360_ROLE;
+
+-- Grant essential privileges to create and manage databases
+GRANT CREATE DATABASE ON ACCOUNT TO ROLE TCH_PATIENT_360_ROLE;
+
+-- Grant privileges needed for Cortex AI features
+-- These require ACCOUNTADMIN to grant initially
+GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE TCH_PATIENT_360_ROLE;
 ```
 
 2) Create a Git Workspace
@@ -22,11 +62,17 @@ CREATE OR REPLACE API INTEGRATION TCH_GIT_API
 - Select the branch (for example, `main`)
 - Ref: Snowflake docs – Create a Git workspace: https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces#label-create-a-git-workspace
 
+Workspace execution path
+- The orchestrator executes files directly from your Workspace so your edits run without re‑fetching from Git. It uses the Snowflake workspace URI form:
+  - Example: `EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/99_verification.sql';`
+  - You can adjust these in `sql/00_master.sql` via `workspace_db`, `workspace_schema`, and `workspace_name`.
+
 3) Open and run the orchestrator
 - Open `sql/00_master.sql` in the Workspace
 - Set parameters as needed near the top:
   - `data_size` → `small|medium|large`
-  - `enable_git_mode` → `false` to execute the Workspace file itself (edits run directly)
+  - `enable_git_mode` → `false` (default) to execute Workspace files via `snow://workspace/.../versions/live`
+  - If your Workspace name or location differs, set `workspace_db`, `workspace_schema`, `workspace_name`
 - Click Run All
 
 4) Optional: Git‑orchestrated mode (executes from a Snowflake Git repository object)
