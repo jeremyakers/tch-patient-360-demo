@@ -54,9 +54,12 @@ ALTER GIT REPOSITORY IDENTIFIER($git_repo_name) FETCH;
 -- Execute step scripts from Workspace (preferred for customization)
 -------------------------------------------------------------------------------
 
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/01_database_setup.sql''';
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/02_raw_tables.sql''';
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/03_conformed_tables.sql''';
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/01_database_setup.sql''';
+EXECUTE IMMEDIATE $stmt;
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/02_raw_tables.sql''';
+EXECUTE IMMEDIATE $stmt;
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/03_conformed_tables.sql''';
+EXECUTE IMMEDIATE $stmt;
 
 -------------------------------------------------------------------------------
 -- Generate staged data via Snowflake Notebook (run before data load)
@@ -65,8 +68,8 @@ EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/
 -- Optional: fetch latest commit for the configured ref
 -- ALTER GIT REPOSITORY IDENTIFIER($git_db || '.' || $git_schema || '.' || $git_repo_name) FETCH;
 
-EXECUTE IMMEDIATE 'CREATE OR REPLACE NOTEBOOK AI_ML.TCH_DATA_GENERATOR FROM '
-                  || $repo_path || '/python/notebooks/ MAIN_FILE = ''tch_data_generator.ipynb''';
+SET nb_stmt = 'CREATE OR REPLACE NOTEBOOK AI_ML.TCH_DATA_GENERATOR FROM ' || $repo_path || '/python/notebooks/ MAIN_FILE = ''tch_data_generator.ipynb''';
+EXECUTE IMMEDIATE $nb_stmt;
 
 EXECUTE NOTEBOOK AI_ML.TCH_DATA_GENERATOR( 'data_size=' || $data_size, 'parallel=true' );
 
@@ -74,33 +77,42 @@ EXECUTE NOTEBOOK AI_ML.TCH_DATA_GENERATOR( 'data_size=' || $data_size, 'parallel
 -- Data load (structured + unstructured) after notebook generates files
 -------------------------------------------------------------------------------
 
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/data_load/01_load_raw_data.sql''';
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/data_load/02_load_unstructured_data.sql''';
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/data_load/01_load_raw_data.sql''';
+EXECUTE IMMEDIATE $stmt;
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/data_load/02_load_unstructured_data.sql''';
+EXECUTE IMMEDIATE $stmt;
 
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/dynamic_tables/01_patient_dynamic_tables.sql''';
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql''';
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/dynamic_tables/01_patient_dynamic_tables.sql''';
+EXECUTE IMMEDIATE $stmt;
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql''';
+EXECUTE IMMEDIATE $stmt;
 
 -- Presentation layer after dynamic tables are created
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/04_presentation_tables.sql''';
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/04_presentation_tables.sql''';
+EXECUTE IMMEDIATE $stmt;
 
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/cortex/01_cortex_analyst_setup.sql''';
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/cortex/02_cortex_search_setup.sql''';
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/cortex/01_cortex_analyst_setup.sql''';
+EXECUTE IMMEDIATE $stmt;
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/cortex/02_cortex_search_setup.sql''';
+EXECUTE IMMEDIATE $stmt;
 
 -------------------------------------------------------------------------------
 -- Streamlit app creation directly from Git repo object (no manual staging)
 -------------------------------------------------------------------------------
 
-EXECUTE IMMEDIATE 'CREATE OR REPLACE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP '
-                  || 'ROOT_LOCATION = ' || $repo_path || '/python/streamlit_app/ '
-                  || 'MAIN_FILE = ''main.py'' '
-                  || 'QUERY_WAREHOUSE = ''TCH_ANALYTICS_WH'' '
-                  || 'TITLE = ''TCH Patient 360''';
+SET app_stmt = 'CREATE OR REPLACE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP ' ||
+               'ROOT_LOCATION = ' || $repo_path || '/python/streamlit_app/ ' ||
+               'MAIN_FILE = ''main.py'' ' ||
+               'QUERY_WAREHOUSE = ''TCH_ANALYTICS_WH'' ' ||
+               'TITLE = ''TCH Patient 360''';
+EXECUTE IMMEDIATE $app_stmt;
 
 -------------------------------------------------------------------------------
 -- Verification
 -------------------------------------------------------------------------------
 
-EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/99_verification.sql''';
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/99_verification.sql''';
+EXECUTE IMMEDIATE $stmt;
 
 SELECT 'Orchestration completed.' AS status,
        $data_size AS data_size;
