@@ -21,6 +21,12 @@ CREATE OR REPLACE API INTEGRATION GIT
 
 GRANT USAGE ON INTEGRATION GIT TO ROLE TCH_PATIENT_360_ROLE;
 
+-- In TCH_PATIENT_360_POC.RAW_DATA (matches sql/00_master.sql defaults)
+CREATE OR REPLACE GIT REPOSITORY TCH_P360_REPO
+  ORIGIN = https://github.com/jeremyakers/tch-patient-360-demo
+  API_INTEGRATION = GIT;
+ALTER GIT REPOSITORY TCH_P360_REPO FETCH;
+
 CREATE OR REPLACE WAREHOUSE TCH_COMPUTE_WH
     WAREHOUSE_SIZE = 'MEDIUM'
     AUTO_SUSPEND = 60
@@ -56,17 +62,6 @@ GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE TCH_PATIENT_360_ROLE;
 ```
 
 2) Create a Git Workspace
-
-3) Create a Git repository clone (required for Notebook/Streamlit)
-
-```sql
-USE ROLE ACCOUNTADMIN;
--- In TCH_PATIENT_360_POC.RAW_DATA (matches sql/00_master.sql defaults)
-CREATE OR REPLACE GIT REPOSITORY TCH_P360_REPO
-  ORIGIN = https://github.com/jeremyakers/tch-patient-360-demo
-  API_INTEGRATION = GIT;
-ALTER GIT REPOSITORY TCH_P360_REPO FETCH;
-```
 
 - In Snowsight: Projects → Workspaces → From Git repository
 - Repository URL: your Git URL (for example, `https://github.com/jeremyakers/tch-patient-360-demo`)
