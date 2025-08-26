@@ -65,11 +65,6 @@ GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE TCH_PATIENT_360_ROLE;
 - Select the branch (for example, `main`)
 - Ref: Snowflake docs – Create a Git workspace: https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces#label-create-a-git-workspace
 
-Workspace execution path
-- The orchestrator executes files directly from your Workspace so your edits run without re‑fetching from Git. It uses the Snowflake workspace URI form:
-  - Example: `EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/99_verification.sql';`
-  - You can adjust these in `sql/00_master.sql` via `workspace_name`.
-
 3) Open and run the orchestrator
 - Open `sql/00_master.sql` in the Workspace
 - Set parameters as needed near the top:
@@ -77,15 +72,7 @@ Workspace execution path
   - If your Workspace name differs, set `workspace_name`
 - Click Run All
 
-4) Optional: Git‑orchestrated mode (executes from a Snowflake Git repository object)
-- If your Snowflake admin created a Git repository object (with FETCH configured), set at the top of `sql/00_master.sql`:
-  - Configure `git_db`, `git_schema`, `git_repo_name`, `git_ref_type`, `git_ref_name`
-- Run All. The script will:
-  - Execute step SQLs via `EXECUTE IMMEDIATE FROM @<repo>/...`
-  - Create and execute the Notebook from the Git path
-  - Create the Streamlit app from the Git path
-
-5) Verify
+4) Verify
 - Run `sql/99_verification.sql` for a consolidated validation of raw loads, dynamic tables, and Cortex services.
 
 ## What gets deployed
@@ -97,8 +84,8 @@ Workspace execution path
 - Streamlit in Snowflake application (Patient 360 app)
 
 ## Data generation
-- Python is already inside Snowflake as a Notebook: `AI_ML.TCH_DATA_GENERATOR`
-- `00_master.sql` can `CREATE NOTEBOOK FROM @repo` (Git mode) and `EXECUTE NOTEBOOK` with parameters:
+- Python is executed inside Snowflake via Notebook: `AI_ML.TCH_DATA_GENERATOR`
+- `00_master.sql` creates the Notebook from the Git repository object (`FROM @repo`) and executes it with parameters:
   - `data_size=small|medium|large`, `parallel=true`
 - The Notebook generates and uploads structured/unstructured files directly to internal stages.
 
@@ -136,7 +123,6 @@ The scripts:
 - `docs/README_WORKSPACES.md` – detailed Workspace/Git guidance
 
 ## Notes
-- For Workspaces, your edits are the source of truth in inline mode (no `EXECUTE IMMEDIATE FROM`).
-- In Git‑orchestrated mode, commit/push Workspace changes and ensure the repo object FETCHes the new commit.
+- For Workspaces, your edits are the source of truth for SQL (executed from `snow://workspace/.../versions/live`).
 - Cortex Analyst semantic YAMLs are under `sql/cortex/semantic_model/` and staged by the deploy steps.
 
