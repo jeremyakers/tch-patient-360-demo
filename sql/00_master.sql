@@ -68,14 +68,16 @@ EXECUTE IMMEDIATE $stmt;
 -- Optional: fetch latest commit for the configured ref
 -- ALTER GIT REPOSITORY IDENTIFIER($git_db || '.' || $git_schema || '.' || $git_repo_name) FETCH;
 
+-- Minimal CREATE (keep string length small), then ALTER to set runtime/compute
 SET nb_stmt = 'CREATE OR REPLACE NOTEBOOK AI_ML.TCH_DATA_GENERATOR FROM ' ||
-              $repo_path || '/python/notebooks/ ' ||
-              'MAIN_FILE = ''tch_data_generator.ipynb'' ' ||
-              'QUERY_WAREHOUSE = ''TCH_AI_ML_WH'' ' ||
-              'RUNTIME_NAME = ''SYSTEM$BASIC_RUNTIME'' ' ||
-              'COMPUTE_POOL = ''TCH_PATIENT_360_POOL'' ' ||
-              'EXTERNAL_ACCESS_INTEGRATIONS = (pypi_access_integration)';
+              $repo_path || '/python/notebooks/ MAIN_FILE = ''tch_data_generator.ipynb''';
 EXECUTE IMMEDIATE $nb_stmt;
+
+-- Configure Notebook for container runtime and access
+ALTER NOTEBOOK AI_ML.TCH_DATA_GENERATOR SET QUERY_WAREHOUSE = TCH_AI_ML_WH;
+ALTER NOTEBOOK AI_ML.TCH_DATA_GENERATOR SET RUNTIME_NAME = 'SYSTEM$BASIC_RUNTIME';
+ALTER NOTEBOOK AI_ML.TCH_DATA_GENERATOR SET COMPUTE_POOL = TCH_PATIENT_360_POOL;
+ALTER NOTEBOOK AI_ML.TCH_DATA_GENERATOR SET EXTERNAL_ACCESS_INTEGRATIONS = (pypi_access_integration);
 
 -- Use AI/ML warehouse for the EXECUTE NOTEBOOK caller session
 USE WAREHOUSE TCH_AI_ML_WH;
