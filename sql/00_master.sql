@@ -54,27 +54,19 @@ ALTER GIT REPOSITORY IDENTIFIER($git_repo_name) FETCH;
 -- Execute step scripts from Workspace (preferred for customization)
 -------------------------------------------------------------------------------
 
-BEGIN
-    LET ws STRING := $workspace_root;
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/01_database_setup.sql';
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/02_raw_tables.sql';
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/03_conformed_tables.sql';
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/04_presentation_tables.sql';
 
-    -- Setup & structure from live Workspace files
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/setup/01_database_setup.sql' );
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/setup/02_raw_tables.sql' );
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/setup/03_conformed_tables.sql' );
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/setup/04_presentation_tables.sql' );
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/data_load/01_load_raw_data.sql';
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/data_load/02_load_unstructured_data.sql';
 
-    -- Data load (structured + unstructured)
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/data_load/01_load_raw_data.sql' );
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/data_load/02_load_unstructured_data.sql' );
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/01_patient_dynamic_tables.sql';
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/02_clinical_dynamic_tables.sql';
 
-    -- Dynamic tables
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/dynamic_tables/01_patient_dynamic_tables.sql' );
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql' );
-
-    -- Cortex services (Analyst + Search)
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/cortex/01_cortex_analyst_setup.sql' );
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/cortex/02_cortex_search_setup.sql' );
-END;
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/01_cortex_analyst_setup.sql';
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/02_cortex_search_setup.sql';
 
 -------------------------------------------------------------------------------
 -- Data generation via Snowflake Notebook (already in-account Python execution)
@@ -104,10 +96,7 @@ CREATE OR REPLACE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP
 -- Verification
 -------------------------------------------------------------------------------
 
-BEGIN
-    LET ws STRING := $workspace_root;
-    EXECUTE IMMEDIATE FROM ( ws || '/sql/99_verification.sql' );
-END;
+EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/99_verification.sql';
 
 SELECT 'Orchestration completed.' AS status,
        $data_size AS data_size;
