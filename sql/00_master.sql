@@ -1,14 +1,11 @@
 -- Texas Children's Hospital Patient 360 PoC - Workspace Orchestrator
 -- Purpose: Single-entry "Run All" script for Snowsight Workspaces
--- Modes supported:
---   1) Workspace-inline: Run this file after editing as needed (simplest)
---   2) Git-orchestrated: Execute step files directly from a Snowflake Git repository object
+-- Execution model:
+--   - SQL executes from the Snowsight Workspace (snow://workspace) to honor user edits
+--   - Notebook and Streamlit are created from the Git repository object for reproducibility
 --
 -- Notes:
--- - To execute committed Git sources, set the variables in the "Git settings" section and
---   ensure the repo object is fetched to the latest commit/tag.
--- - To execute the Workspace edits you just made, keep everything inline here and click Run All.
--- - Streamlit/Notebook creation can point at the Git repository object so no manual staging is required.
+-- - Streamlit/Notebook creation points at the Git repository object so no manual staging is required.
 
 -------------------------------------------------------------------------------
 -- Context & parameters
@@ -20,7 +17,6 @@ USE WAREHOUSE TCH_COMPUTE_WH;
 
 -- Adjustable parameters
 SET data_size = 'medium';              -- small|medium|large (affects Notebook generation)
-SET enable_git_mode = false;           -- true to execute from a Git repo object paths
 
 -- Workspace settings (preferred execution source)
 -- Snowsight Workspace location (DB and schema are fixed as USER$.PUBLIC)
@@ -32,7 +28,7 @@ SET git_repo_name = 'TCH_P360_REPO';   -- name of the Git repository object
 SET git_ref_type = 'branches';         -- 'branches' or 'tags'
 SET git_ref_name = 'main';             -- branch or tag to pin
 
--- Derived repo path (only used if enable_git_mode=true)
+-- Derived repo path (used for Notebook and Streamlit sources)
 SET repo_path = '@' || IDENTIFIER($git_db) || '.' || IDENTIFIER($git_schema) || '.' || IDENTIFIER($git_repo_name)
                  || '/' || $git_ref_type || '/' || QUOTE_IDENT($git_ref_name);
 
@@ -50,108 +46,58 @@ EXECUTE IMMEDIATE $$
 $$;
 
 -------------------------------------------------------------------------------
--- Option A: Run existing step scripts from Git repo object (committed source)
+-- Execute step scripts from Workspace (preferred for customization)
 -------------------------------------------------------------------------------
 
-BEGIN
-    IF ($enable_git_mode) THEN
-        -- Optional: fetch latest commit for the configured ref (requires object to exist)
-        --
-        -- Example (uncomment and adjust if desired):
-        -- ALTER GIT REPOSITORY IDENTIFIER($git_db || '.' || $git_schema || '.' || $git_repo_name) FETCH;
+-- Setup & structure from live Workspace files
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/01_database_setup.sql' );
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/02_raw_tables.sql' );
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/03_conformed_tables.sql' );
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/04_presentation_tables.sql' );
 
-        -- Setup & structure
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/setup/01_database_setup.sql' );
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/setup/02_raw_tables.sql' );
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/setup/03_conformed_tables.sql' );
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/setup/04_presentation_tables.sql' );
+-- Data load (structured + unstructured)
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/data_load/01_load_raw_data.sql' );
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/data_load/02_load_unstructured_data.sql' );
 
-        -- Data load (structured + unstructured)
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/data_load/01_load_raw_data.sql' );
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/data_load/02_load_unstructured_data.sql' );
+-- Dynamic tables
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/dynamic_tables/01_patient_dynamic_tables.sql' );
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql' );
 
-        -- Dynamic tables
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/dynamic_tables/01_patient_dynamic_tables.sql' );
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql' );
-
-        -- Cortex services (Analyst + Search)
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/cortex/01_cortex_analyst_setup.sql' );
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/cortex/02_cortex_search_setup.sql' );
-    END IF;
-END;
-
--------------------------------------------------------------------------------
--- Option B: Execute step scripts from Workspace (preferred for customization)
--------------------------------------------------------------------------------
-
-BEGIN
-    IF (NOT $enable_git_mode) THEN
-        -- Setup & structure from live Workspace files
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/01_database_setup.sql' );
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/02_raw_tables.sql' );
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/03_conformed_tables.sql' );
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/04_presentation_tables.sql' );
-
-        -- Data load (structured + unstructured)
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/data_load/01_load_raw_data.sql' );
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/data_load/02_load_unstructured_data.sql' );
-
-        -- Dynamic tables
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/dynamic_tables/01_patient_dynamic_tables.sql' );
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql' );
-
-        -- Cortex services (Analyst + Search)
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/cortex/01_cortex_analyst_setup.sql' );
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/cortex/02_cortex_search_setup.sql' );
-    END IF;
-END;
+-- Cortex services (Analyst + Search)
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/cortex/01_cortex_analyst_setup.sql' );
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/cortex/02_cortex_search_setup.sql' );
 
 -------------------------------------------------------------------------------
 -- Data generation via Snowflake Notebook (already in-account Python execution)
 -------------------------------------------------------------------------------
 
--- Preferred: create the Notebook object from the Git repo object, then execute it
-BEGIN
-    IF ($enable_git_mode) THEN
-        -- Create Notebook from Git (if supported in the account)
-        -- Adjust MAIN_FILE if you place the notebook elsewhere
-        CREATE OR REPLACE NOTEBOOK AI_ML.TCH_DATA_GENERATOR
-            FROM ( $repo_path || '/python/notebooks/' )
-            MAIN_FILE = 'tch_data_generator.ipynb';
+-- Create the Notebook from the Git repository object, then execute it
+-- Optional: fetch latest commit for the configured ref
+-- ALTER GIT REPOSITORY IDENTIFIER($git_db || '.' || $git_schema || '.' || $git_repo_name) FETCH;
 
-        -- Execute Notebook with parameters controlling data volume
-        EXECUTE NOTEBOOK AI_ML.TCH_DATA_GENERATOR( 'data_size=' || $data_size, 'parallel=true' );
-    END IF;
-END;
+CREATE OR REPLACE NOTEBOOK AI_ML.TCH_DATA_GENERATOR
+    FROM ( $repo_path || '/python/notebooks/' )
+    MAIN_FILE = 'tch_data_generator.ipynb';
+
+EXECUTE NOTEBOOK AI_ML.TCH_DATA_GENERATOR( 'data_size=' || $data_size, 'parallel=true' );
 
 -------------------------------------------------------------------------------
 -- Streamlit app creation directly from Git repo object (no manual staging)
 -------------------------------------------------------------------------------
 
-BEGIN
-    IF ($enable_git_mode) THEN
-        CREATE OR REPLACE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP
-            ROOT_LOCATION = ( $repo_path || '/python/streamlit_app/' )
-            MAIN_FILE     = 'main.py'
-            QUERY_WAREHOUSE = 'TCH_ANALYTICS_WH'
-            TITLE = 'TCH Patient 360';
-    END IF;
-END;
+CREATE OR REPLACE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP
+    ROOT_LOCATION = ( $repo_path || '/python/streamlit_app/' )
+    MAIN_FILE     = 'main.py'
+    QUERY_WAREHOUSE = 'TCH_ANALYTICS_WH'
+    TITLE = 'TCH Patient 360';
 
 -------------------------------------------------------------------------------
 -- Verification
 -------------------------------------------------------------------------------
 
-BEGIN
-    IF ($enable_git_mode) THEN
-        EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/99_verification.sql' );
-    ELSE
-        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/99_verification.sql' );
-    END IF;
-END;
+EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/99_verification.sql' );
 
 SELECT 'Orchestration completed.' AS status,
-       $enable_git_mode AS used_git_mode,
        $data_size AS data_size;
 
 

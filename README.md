@@ -56,6 +56,18 @@ GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE TCH_PATIENT_360_ROLE;
 ```
 
 2) Create a Git Workspace
+
+3) Create a Git repository clone (required for Notebook/Streamlit)
+
+```sql
+USE ROLE ACCOUNTADMIN;
+-- In TCH_PATIENT_360_POC.RAW_DATA (matches sql/00_master.sql defaults)
+CREATE OR REPLACE GIT REPOSITORY TCH_P360_REPO
+  ORIGIN = https://github.com/jeremyakers/tch-patient-360-demo
+  API_INTEGRATION = GIT;
+ALTER GIT REPOSITORY TCH_P360_REPO FETCH;
+```
+
 - In Snowsight: Projects → Workspaces → From Git repository
 - Repository URL: your Git URL (for example, `https://github.com/jeremyakers/tch-patient-360-demo`)
 - Choose your API Integration and auth (OAuth2 or PAT)
@@ -65,19 +77,17 @@ GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE TCH_PATIENT_360_ROLE;
 Workspace execution path
 - The orchestrator executes files directly from your Workspace so your edits run without re‑fetching from Git. It uses the Snowflake workspace URI form:
   - Example: `EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/99_verification.sql';`
-  - You can adjust these in `sql/00_master.sql` via `workspace_db`, `workspace_schema`, and `workspace_name`.
+  - You can adjust these in `sql/00_master.sql` via `workspace_name`.
 
 3) Open and run the orchestrator
 - Open `sql/00_master.sql` in the Workspace
 - Set parameters as needed near the top:
   - `data_size` → `small|medium|large`
-  - `enable_git_mode` → `false` (default) to execute Workspace files via `snow://workspace/.../versions/live`
-  - If your Workspace name or location differs, set `workspace_db`, `workspace_schema`, `workspace_name`
+  - If your Workspace name differs, set `workspace_name`
 - Click Run All
 
 4) Optional: Git‑orchestrated mode (executes from a Snowflake Git repository object)
 - If your Snowflake admin created a Git repository object (with FETCH configured), set at the top of `sql/00_master.sql`:
-  - `enable_git_mode = true`
   - Configure `git_db`, `git_schema`, `git_repo_name`, `git_ref_type`, `git_ref_name`
 - Run All. The script will:
   - Execute step SQLs via `EXECUTE IMMEDIATE FROM @<repo>/...`
@@ -100,22 +110,6 @@ Workspace execution path
 - `00_master.sql` can `CREATE NOTEBOOK FROM @repo` (Git mode) and `EXECUTE NOTEBOOK` with parameters:
   - `data_size=small|medium|large`, `parallel=true`
 - The Notebook generates and uploads structured/unstructured files directly to internal stages.
-
-## Optional: Snowflake Git repository object route
-If your admins prefer running everything from a Snowflake Git repo object (stage‑like path):
-
-```sql
--- Admin once
-CREATE OR REPLACE GIT REPOSITORY TCH_P360_REPO
-  ORIGIN = 'https://github.com/jeremyakers/tch-patient-360-demo'
-  API_INTEGRATION = <api_integration>;
-ALTER GIT REPOSITORY TCH_P360_REPO FETCH;
-
--- Then run from @repo
-you_db.you_schema.TCH_P360_REPO/branches/main/sql/00_master.sql
-```
-
-Use `EXECUTE IMMEDIATE FROM @"DB"."SCHEMA"."TCH_P360_REPO"/branches/"main"/sql/00_master.sql;` or open `00_master.sql` in a Git Workspace and set `enable_git_mode=true`.
 
 ## Optional fallbacks: Bash/PowerShell deploy
 If you prefer CLI automation (SnowCLI required):
@@ -149,7 +143,6 @@ The scripts:
 - `sql/` – setup, data_load, dynamic_tables, cortex, verification
 - `python/` – Streamlit app and utilities; Snowflake Notebook sources
 - `docs/README_WORKSPACES.md` – detailed Workspace/Git guidance
-- `design_docs/` – design and planning docs
 
 ## Notes
 - For Workspaces, your edits are the source of truth in inline mode (no `EXECUTE IMMEDIATE FROM`).
