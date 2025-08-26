@@ -71,7 +71,17 @@ EXECUTE IMMEDIATE $stmt;
 SET nb_stmt = 'CREATE OR REPLACE NOTEBOOK AI_ML.TCH_DATA_GENERATOR FROM ' || $repo_path || '/python/notebooks/ MAIN_FILE = ''tch_data_generator.ipynb''';
 EXECUTE IMMEDIATE $nb_stmt;
 
+-- Configure Notebook to use Container Services compute pool (Notebook on Container)
+ALTER NOTEBOOK AI_ML.TCH_DATA_GENERATOR UNSET WAREHOUSE;
+ALTER NOTEBOOK AI_ML.TCH_DATA_GENERATOR SET COMPUTE_POOL = TCH_PATIENT_360_POOL;
+
+-- Use AI/ML warehouse for the EXECUTE NOTEBOOK caller session
+USE WAREHOUSE TCH_AI_ML_WH;
+
 EXECUTE NOTEBOOK AI_ML.TCH_DATA_GENERATOR( 'data_size=' || $data_size, 'parallel=true' );
+
+-- Restore compute warehouse for subsequent SQL work
+USE WAREHOUSE TCH_COMPUTE_WH;
 
 -------------------------------------------------------------------------------
 -- Data load (structured + unstructured) after notebook generates files
