@@ -13,11 +13,10 @@ UNION ALL SELECT 'ORACLE_ERP.ENCOUNTER_FINANCIALS', COUNT(*) FROM ORACLE_ERP.ENC
 UNION ALL SELECT 'SALESFORCE.PATIENT_PORTAL_ACTIVITY', COUNT(*) FROM SALESFORCE.PATIENT_PORTAL_ACTIVITY
 ORDER BY object_name;
 
--- Verify Dynamic Tables
-SELECT table_name, target_lag, last_refresh_time, refresh_mode
-FROM INFORMATION_SCHEMA.TABLES
-WHERE table_type = 'DYNAMIC TABLE'
-ORDER BY table_name;
+-- Verify Dynamic Tables (use INFORMATION_SCHEMA.DYNAMIC_TABLES)
+SELECT name AS table_name, target_lag, refresh_mode
+FROM INFORMATION_SCHEMA.DYNAMIC_TABLES
+ORDER BY name;
 
 -- Multi-source integration sanity check
 SELECT 
