@@ -54,9 +54,9 @@ ALTER GIT REPOSITORY IDENTIFIER($git_repo_name) FETCH;
 -- Execute step scripts from Workspace (preferred for customization)
 -------------------------------------------------------------------------------
 
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/01_database_setup.sql';
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/02_raw_tables.sql';
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/03_conformed_tables.sql';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/01_database_setup.sql''';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/02_raw_tables.sql''';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/03_conformed_tables.sql''';
 
 -------------------------------------------------------------------------------
 -- Generate staged data via Snowflake Notebook (run before data load)
@@ -74,17 +74,17 @@ EXECUTE NOTEBOOK AI_ML.TCH_DATA_GENERATOR( 'data_size=' || $data_size, 'parallel
 -- Data load (structured + unstructured) after notebook generates files
 -------------------------------------------------------------------------------
 
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/data_load/01_load_raw_data.sql';
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/data_load/02_load_unstructured_data.sql';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/data_load/01_load_raw_data.sql''';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/data_load/02_load_unstructured_data.sql''';
 
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/01_patient_dynamic_tables.sql';
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/dynamic_tables/02_clinical_dynamic_tables.sql';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/dynamic_tables/01_patient_dynamic_tables.sql''';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql''';
 
 -- Presentation layer after dynamic tables are created
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/setup/04_presentation_tables.sql';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/04_presentation_tables.sql''';
 
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/01_cortex_analyst_setup.sql';
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/cortex/02_cortex_search_setup.sql';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/cortex/01_cortex_analyst_setup.sql''';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/cortex/02_cortex_search_setup.sql''';
 
 -------------------------------------------------------------------------------
 -- Streamlit app creation directly from Git repo object (no manual staging)
@@ -100,7 +100,7 @@ EXECUTE IMMEDIATE 'CREATE OR REPLACE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP 
 -- Verification
 -------------------------------------------------------------------------------
 
-EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/versions/live/sql/99_verification.sql';
+EXECUTE IMMEDIATE 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/99_verification.sql''';
 
 SELECT 'Orchestration completed.' AS status,
        $data_size AS data_size;
