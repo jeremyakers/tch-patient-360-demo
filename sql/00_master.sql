@@ -65,9 +65,8 @@ EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/ver
 -- Optional: fetch latest commit for the configured ref
 -- ALTER GIT REPOSITORY IDENTIFIER($git_db || '.' || $git_schema || '.' || $git_repo_name) FETCH;
 
-CREATE OR REPLACE NOTEBOOK AI_ML.TCH_DATA_GENERATOR
-    FROM ( $repo_path || '/python/notebooks/' )
-    MAIN_FILE = 'tch_data_generator.ipynb';
+EXECUTE IMMEDIATE 'CREATE OR REPLACE NOTEBOOK AI_ML.TCH_DATA_GENERATOR FROM '
+                  || $repo_path || '/python/notebooks/ MAIN_FILE = ''tch_data_generator.ipynb''';
 
 EXECUTE NOTEBOOK AI_ML.TCH_DATA_GENERATOR( 'data_size=' || $data_size, 'parallel=true' );
 
@@ -91,11 +90,11 @@ EXECUTE IMMEDIATE FROM 'snow://workspace/USER$.PUBLIC."tch-patient-360-demo"/ver
 -- Streamlit app creation directly from Git repo object (no manual staging)
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP
-    ROOT_LOCATION = ( $repo_path || '/python/streamlit_app/' )
-    MAIN_FILE     = 'main.py'
-    QUERY_WAREHOUSE = 'TCH_ANALYTICS_WH'
-    TITLE = 'TCH Patient 360';
+EXECUTE IMMEDIATE 'CREATE OR REPLACE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP '
+                  || 'ROOT_LOCATION = ' || $repo_path || '/python/streamlit_app/ '
+                  || 'MAIN_FILE = ''main.py'' '
+                  || 'QUERY_WAREHOUSE = ''TCH_ANALYTICS_WH'' '
+                  || 'TITLE = ''TCH Patient 360''';
 
 -------------------------------------------------------------------------------
 -- Verification
