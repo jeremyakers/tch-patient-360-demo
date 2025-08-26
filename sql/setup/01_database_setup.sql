@@ -54,13 +54,13 @@ CREATE OR REPLACE FILE FORMAT RAW_DATA.CSV_FORMAT
 
 -- Create stages for data loading
 CREATE STAGE IF NOT EXISTS RAW_DATA.PATIENT_DATA_STAGE
-    COMMENT = 'Stage for patient demographic and clinical data files';
-ALTER STAGE RAW_DATA.PATIENT_DATA_STAGE SET DIRECTORY = ( ENABLE = TRUE );
+    COMMENT = 'Stage for patient demographic and clinical data files'
+    DIRECTORY = ( ENABLE = TRUE );
 ALTER STAGE RAW_DATA.PATIENT_DATA_STAGE SET FILE_FORMAT = RAW_DATA.CSV_FORMAT;
 
 CREATE STAGE IF NOT EXISTS RAW_DATA.UNSTRUCTURED_DATA_STAGE
-    COMMENT = 'Stage for unstructured clinical documents and notes';
-ALTER STAGE RAW_DATA.UNSTRUCTURED_DATA_STAGE SET DIRECTORY = ( ENABLE = TRUE );
+    COMMENT = 'Stage for unstructured clinical documents and notes'
+    DIRECTORY = ( ENABLE = TRUE );
 ALTER STAGE RAW_DATA.UNSTRUCTURED_DATA_STAGE SET FILE_FORMAT = (TYPE = 'CSV' FIELD_DELIMITER = 'NONE' RECORD_DELIMITER = 'NONE');
 
 -- Set default warehouse (created by ACCOUNTADMIN setup)

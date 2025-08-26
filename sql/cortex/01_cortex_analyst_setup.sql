@@ -25,8 +25,9 @@ COMMENT = 'File format for YAML semantic model files';
 
 -- Create stage for semantic model files
 CREATE OR REPLACE STAGE SEMANTIC_MODEL_STAGE
-FILE_FORMAT = YAML_FORMAT
-COMMENT = 'Stage for Cortex Analyst semantic model configuration files';
+  FILE_FORMAT = YAML_FORMAT
+  DIRECTORY = ( ENABLE = TRUE )
+  COMMENT = 'Stage for Cortex Analyst semantic model configuration files';
 
 -- =============================================================================
 -- PATIENT 360 SEMANTIC MODEL DEFINITION
