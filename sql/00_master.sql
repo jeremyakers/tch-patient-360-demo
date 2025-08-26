@@ -12,6 +12,7 @@
 -------------------------------------------------------------------------------
 
 -- Required role/warehouse for deployment
+-- Test comment
 USE ROLE TCH_PATIENT_360_ROLE;
 USE WAREHOUSE TCH_COMPUTE_WH;
 
