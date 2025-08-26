@@ -21,6 +21,11 @@ USE WAREHOUSE TCH_COMPUTE_WH;
 -- Adjustable parameters
 SET data_size = 'medium';              -- small|medium|large (affects Notebook generation)
 SET enable_git_mode = false;           -- true to execute from a Git repo object paths
+
+-- Workspace settings (preferred execution source)
+-- Snowsight Workspace location (DB and schema are fixed as USER$.PUBLIC)
+SET workspace_name = 'tch-patient-360-demo';
+SET workspace_root = 'snow://workspace/USER$.PUBLIC.' || QUOTE_IDENT($workspace_name) || '/versions/live';
 SET git_db = 'TCH_PATIENT_360_POC';    -- database of the Git repository object
 SET git_schema = 'RAW_DATA';           -- schema of the Git repository object
 SET git_repo_name = 'TCH_P360_REPO';   -- name of the Git repository object
@@ -76,18 +81,28 @@ BEGIN
 END;
 
 -------------------------------------------------------------------------------
--- Option B: Workspace-inline execution (edit here, then Run All)
+-- Option B: Execute step scripts from Workspace (preferred for customization)
 -------------------------------------------------------------------------------
 
 BEGIN
     IF (NOT $enable_git_mode) THEN
-        -- Minimal inline bootstrap (safe if setup files already cover this)
-        EXECUTE IMMEDIATE $$ USE DATABASE TCH_PATIENT_360_POC; $$;
-        EXECUTE IMMEDIATE $$ USE SCHEMA RAW_DATA; $$;
+        -- Setup & structure from live Workspace files
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/01_database_setup.sql' );
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/02_raw_tables.sql' );
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/03_conformed_tables.sql' );
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/setup/04_presentation_tables.sql' );
 
-        -- If preferred, copy key statements from the step scripts here for a fully inline flow.
-        -- Keeping this lightweight to avoid duplication; by default we rely on the existing
-        -- step scripts being executed in Git mode or run manually from the Workspace.
+        -- Data load (structured + unstructured)
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/data_load/01_load_raw_data.sql' );
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/data_load/02_load_unstructured_data.sql' );
+
+        -- Dynamic tables
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/dynamic_tables/01_patient_dynamic_tables.sql' );
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/dynamic_tables/02_clinical_dynamic_tables.sql' );
+
+        -- Cortex services (Analyst + Search)
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/cortex/01_cortex_analyst_setup.sql' );
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/cortex/02_cortex_search_setup.sql' );
     END IF;
 END;
 
@@ -131,12 +146,7 @@ BEGIN
     IF ($enable_git_mode) THEN
         EXECUTE IMMEDIATE FROM ( $repo_path || '/sql/99_verification.sql' );
     ELSE
-        -- Inline lightweight checks
-        SELECT 'DYNAMIC_TABLE_COUNT' AS metric,
-               COUNT(*) AS value
-        FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_TYPE = 'DYNAMIC TABLE'
-          AND TABLE_SCHEMA = 'CONFORMED';
+        EXECUTE IMMEDIATE FROM ( $workspace_root || '/sql/99_verification.sql' );
     END IF;
 END;
 
