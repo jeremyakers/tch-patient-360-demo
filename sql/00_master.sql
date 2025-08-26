@@ -29,7 +29,7 @@ SET git_ref_type = 'branches';         -- 'branches' or 'tags'
 SET git_ref_name = 'main';             -- branch or tag to pin
 
 -- Derived repo path (used for Notebook and Streamlit sources)
-SET repo_path = '@' || IDENTIFIER($git_db) || '.' || IDENTIFIER($git_schema) || '.' || IDENTIFIER($git_repo_name)
+SET repo_path = '@' || $git_db || '.' || $git_schema || '.' || $git_repo_name
                  || '/' || $git_ref_type || '/' || $git_ref_name;
 
 -------------------------------------------------------------------------------
