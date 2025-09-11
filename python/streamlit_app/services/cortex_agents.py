@@ -43,8 +43,9 @@ class CortexAgentsService:
         self.agent_schema = "AI_ML"
         # List/create agents within database/schema scope
         self.agents_admin_endpoint = f"/api/v2/databases/{self.agent_database}/schemas/{self.agent_schema}/agents"
-        # Use persisted agent run endpoint for v2 API features
-        self.api_endpoint = f"/api/v2/databases/{self.agent_database}/schemas/{self.agent_schema}/agents/{self.agent_name}/run"
+        # TEMPORARY: Use non-persisted agent endpoint due to 404 on persisted endpoint
+        # TODO: Fix persisted agent endpoint once we understand the correct format
+        self.api_endpoint = "/api/v2/cortex/agent:run"
         # Threads are scoped to the agent
         self.threads_endpoint = f"/api/v2/databases/{self.agent_database}/schemas/{self.agent_schema}/agents/{self.agent_name}/threads"
         
@@ -342,11 +343,17 @@ Always provide context about the data timeframe and any limitations of your anal
             ]
         })
         
-        # Build payload for persisted agent run endpoint
-        # When using persisted agent endpoint, we don't include agent reference in payload
+        # Build payload for non-persisted agent endpoint (agent:run)
+        # When using agent:run, we need to include the agent reference in payload
         payload = {
             "messages": messages,
-            # Model can override the agent's default model if needed
+            # Reference the persisted agent (fully qualified)
+            "agent": {
+                "database": self.agent_database,
+                "schema": self.agent_schema,
+                "name": self.agent_name
+            },
+            # Model specification
             "models": {
                 "orchestration": self.model
             }
