@@ -58,112 +58,59 @@ class CortexAgentsService:
         # Healthcare system prompt
         self.system_prompt = self._get_healthcare_system_prompt()
         
-        # Ensure a persisted Agent exists (idempotent); ignore failures gracefully
-        try:
-            self.ensure_agent_exists()
-        except Exception as _e:
-            logger.warning(f"Agent ensure step skipped: {_e}")
+        # Ensure a persisted Agent exists (idempotent); fail fast on errors
+        self.ensure_agent_exists()
 
         logger.info("CortexAgentsService initialized")
 
     def ensure_agent_exists(self) -> None:
         """Ensure a persisted Agent object exists; create it if missing.
 
-        Notes:
-            - Uses REST API to list agents and create when absent.
-            - Keeps instructions minimal; tools are still provided per run.
+        Behavior:
+            - Uses documented scoped REST endpoints only.
+            - Surfaces non-404/200 statuses as errors; no silent fallbacks.
         """
-        try:
-            def _parse_agents(content_obj):
-                try:
-                    import json as _json
-                    parsed = _json.loads(content_obj) if isinstance(content_obj, str) else content_obj
-                except Exception:
-                    return []
-                if isinstance(parsed, dict):
-                    # Common shapes: { agents: [...] } or { data: [...] }
-                    return parsed.get('agents') or parsed.get('data') or []
-                if isinstance(parsed, list):
-                    return parsed
-                return []
+        # 1) Check if agent exists
+        get_endpoint = f"{self.agents_admin_endpoint}/{self.agent_name}"
+        get_resp = _snowflake.send_snow_api_request(
+            "GET",
+            get_endpoint,
+            {"Content-Type": "application/json"},
+            {},
+            None,
+            None,
+            20000
+        )
+        status = getattr(get_resp, 'status', 0)
+        if status == 200:
+            logger.info(f"Persisted Agent exists: {self.agent_name}")
+            return
+        if status not in (200, 404):
+            content = getattr(get_resp, 'content', '')
+            reason = getattr(get_resp, 'reason', '')
+            raise RuntimeError(f"Agent GET failed ({status} {reason}): {str(content)[:500]}")
 
-            def _list_agents_try(endp, params):
-                resp = _snowflake.send_snow_api_request(
-                    "GET",
-                    endp,
-                    {"Content-Type": "application/json"},
-                    params or {},
-                    None,
-                    None,
-                    20000
-                )
-                return _parse_agents(getattr(resp, 'content', resp))
-
-            # Try DB/Schema-scoped endpoint first
-            agents_list = _list_agents_try(self.agents_admin_endpoint, {})
-
-            # Fallback: global endpoint with db/schema query params
-            if not any(isinstance(a, dict) and a.get('name') == self.agent_name for a in agents_list):
-                global_endpoint = "/api/v2/cortex/agents"
-                agents_list_alt = _list_agents_try(global_endpoint, {
-                    "database": self.agent_database,
-                    "schema": self.agent_schema
-                })
-                agents_list = agents_list or agents_list_alt
-
-            # Expose debug info for UI troubleshooting
-            try:
-                if st is not None:
-                    st.session_state['agents_admin_debug'] = {
-                        'checked_endpoints': [self.agents_admin_endpoint, '/api/v2/cortex/agents'],
-                        'agent_names': [a.get('name') for a in agents_list if isinstance(a, dict)]
-                    }
-            except Exception:
-                pass
-
-            if any(isinstance(a, dict) and a.get('name') == self.agent_name for a in agents_list):
-                logger.info(f"Persisted Agent already exists: {self.agent_name}")
-                return
-
-            # Create agent with default model and instructions
-            payload = {
-                "name": self.agent_name,
-                "models": {"orchestration": self.model},
-                "instructions": self._get_healthcare_system_prompt(),
-                # For global endpoint creation
-                "database": self.agent_database,
-                "schema": self.agent_schema
-            }
-
-            def _create_try(endp, body):
-                return _snowflake.send_snow_api_request(
-                    "POST",
-                    endp,
-                    {"Content-Type": "application/json"},
-                    {},
-                    body,
-                    None,
-                    25000
-                )
-
-            # Attempt create via scoped endpoint; fallback to global
-            create_resp = _create_try(self.agents_admin_endpoint, {
-                "name": self.agent_name,
-                "models": {"orchestration": self.model},
-                "instructions": self._get_healthcare_system_prompt()
-            })
-            status = getattr(create_resp, 'status', 0)
-            if status not in (200, 201):
-                create_resp2 = _create_try("/api/v2/cortex/agents", payload)
-                status2 = getattr(create_resp2, 'status', 0)
-                if status2 not in (200, 201):
-                    logger.warning(f"Agent create failed (status {status}/{status2}); proceeding without persisted agent")
-                else:
-                    logger.info(f"Persisted Agent created via global endpoint: {self.agent_name}")
-            else:
-                logger.info(f"Persisted Agent created: {self.agent_name}")
-        except Exception as e:
-            logger.warning(f"Failed to verify/create Agent: {e}")
+        # 2) Create when not found (404)
+        payload = {
+            "name": self.agent_name,
+            "models": {"orchestration": self.model},
+            "instructions": self._get_healthcare_system_prompt()
+        }
+        create_resp = _snowflake.send_snow_api_request(
+            "POST",
+            self.agents_admin_endpoint,
+            {"Content-Type": "application/json"},
+            {},
+            payload,
+            None,
+            25000
+        )
+        cstatus = getattr(create_resp, 'status', 0)
+        if cstatus not in (200, 201):
+            ccontent = getattr(create_resp, 'content', '')
+            creason = getattr(create_resp, 'reason', '')
+            raise RuntimeError(f"Agent CREATE failed ({cstatus} {creason}): {str(ccontent)[:500]}")
+        logger.info(f"Persisted Agent created: {self.agent_name}")
 
     def create_thread(self) -> Optional[str]:
         """Create a new Cortex thread and return thread_id."""
