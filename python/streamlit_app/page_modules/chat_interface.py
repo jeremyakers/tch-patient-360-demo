@@ -488,19 +488,30 @@ def _process_user_query(query: str):
     # Get response from Cortex Agents
     with st.spinner("🤖 Processing your request with AI agents..."):
         try:
+            # TEMPORARY: Skip thread creation for debugging
             # Create thread if not exists (v2 API)
-            if 'cortex_thread_id' not in st.session_state or not st.session_state.cortex_thread_id:
-                thread_id = cortex_agents.create_thread()
-                if thread_id:
-                    st.session_state.cortex_thread_id = thread_id
-                    logger.info(f"Created new Cortex thread: {thread_id}")
+            # if 'cortex_thread_id' not in st.session_state or not st.session_state.cortex_thread_id:
+            #     thread_id = cortex_agents.create_thread()
+            #     if thread_id:
+            #         st.session_state.cortex_thread_id = thread_id
+            #         logger.info(f"Created new Cortex thread: {thread_id}")
             
-            # Send to Cortex Agents with thread support
+            # Send to Cortex Agents WITHOUT thread support for debugging
+            st.info(f"🔍 DEBUG: Sending query to agent endpoint: {cortex_agents.api_endpoint}")
+            st.info(f"🔍 DEBUG: Agent name: {cortex_agents.agent_name}")
+            
             response = cortex_agents.send_message(
                 query, 
                 st.session_state.conversation_history,
-                thread_id=st.session_state.get('cortex_thread_id')
+                thread_id=None  # Temporarily disable threads
             )
+            
+            st.info(f"🔍 DEBUG: Response type: {type(response)}, keys: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")
+            
+            # Show raw response for debugging
+            if response:
+                with st.expander("🔍 Raw Response Debug"):
+                    st.json(response)
             
             if not response or "error" in response:
                 error_msg = response.get("error", "Unknown error") if response else "No response received"

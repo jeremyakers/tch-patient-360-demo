@@ -349,11 +349,15 @@ Always provide context about the data timeframe and any limitations of your anal
             # Model can override the agent's default model if needed
             "models": {
                 "orchestration": self.model
-            },
-            # Include thread_id if provided for conversation continuity
-            "thread_id": thread_id,
-            # Tools configuration - these override/supplement agent's configured tools
-            "tools": [
+            }
+        }
+        
+        # Only include thread_id if it's not None (v2 API requirement)
+        if thread_id is not None:
+            payload["thread_id"] = thread_id
+            
+        # Tools configuration - these override/supplement agent's configured tools
+        payload["tools"] = [
                 {
                     "tool_spec": {
                         "type": "cortex_analyst_text_to_sql",
@@ -366,17 +370,18 @@ Always provide context about the data timeframe and any limitations of your anal
                         "name": "clinical_document_search"
                     }
                 }
-            ],
-            "tool_resources": {
-                "healthcare_analyst": {
-                    "semantic_model_file": getattr(self, 'semantic_model_file_chat', self.semantic_model_file)
-                },
-                "clinical_document_search": {
-                    "name": self.search_services["clinical_docs"],
-                    "max_results": int(st.session_state.get('cortex_search_max_results', 50)) if 'st' in globals() else 50,
-                    "id_column": "file_path",
-                    "title_column": "MRN"
-                }
+        ]
+        
+        # Tool resources configuration
+        payload["tool_resources"] = {
+            "healthcare_analyst": {
+                "semantic_model_file": getattr(self, 'semantic_model_file_chat', self.semantic_model_file)
+            },
+            "clinical_document_search": {
+                "name": self.search_services["clinical_docs"],
+                "max_results": int(st.session_state.get('cortex_search_max_results', 50)) if 'st' in globals() else 50,
+                "id_column": "file_path",
+                "title_column": "MRN"
             }
         }
         
