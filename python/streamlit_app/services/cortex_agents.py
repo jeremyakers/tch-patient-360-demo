@@ -31,7 +31,8 @@ class CortexAgentsService:
         self.session = get_active_session()
         # Build full API endpoint URL
         # Note: In SiS, we use the relative path, the base URL is handled by _snowflake module
-        self.api_endpoint = "/api/v2/cortex/agent:run"
+        # Use the persisted agent endpoint for v2 API with multi-step reasoning
+        self.api_endpoint = None  # Will be set after agent configuration
         self.api_timeout = 50000  # milliseconds
         # Default orchestration model for persisted Agent
         self.model = "claude-3-7-sonnet"
@@ -42,7 +43,10 @@ class CortexAgentsService:
         self.agent_schema = "AI_ML"
         # List/create agents within database/schema scope
         self.agents_admin_endpoint = f"/api/v2/databases/{self.agent_database}/schemas/{self.agent_schema}/agents"
-        self.threads_endpoint = "/api/v2/cortex/threads"      # Create/delete threads
+        # Use persisted agent run endpoint for v2 API features
+        self.api_endpoint = f"/api/v2/databases/{self.agent_database}/schemas/{self.agent_schema}/agents/{self.agent_name}/run"
+        # Threads are scoped to the agent
+        self.threads_endpoint = f"/api/v2/databases/{self.agent_database}/schemas/{self.agent_schema}/agents/{self.agent_name}/threads"
         
         # Healthcare-specific configuration  
         # Use the existing semantic model YAML file
@@ -338,19 +342,17 @@ Always provide context about the data timeframe and any limitations of your anal
             ]
         })
         
-        # Build payload with tools configuration for v2 API
+        # Build payload for persisted agent run endpoint
+        # When using persisted agent endpoint, we don't include agent reference in payload
         payload = {
             "messages": messages,
-            # Reference the persisted agent (fully qualified)
-            "agent": {
-                "database": self.agent_database, 
-                "schema": self.agent_schema, 
-                "name": self.agent_name
+            # Model can override the agent's default model if needed
+            "models": {
+                "orchestration": self.model
             },
-            # Model is specified when using the agent
-            "model": self.model,
             # Include thread_id if provided for conversation continuity
             "thread_id": thread_id,
+            # Tools configuration - these override/supplement agent's configured tools
             "tools": [
                 {
                     "tool_spec": {
