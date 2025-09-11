@@ -49,13 +49,16 @@ def render_chat_interface():
         
         st.subheader("📝 Example Queries")
         
+        # Updated examples to showcase v2 multi-step reasoning capabilities
         example_queries = [
+            "Show me the top 5 diagnoses for patients aged 10-15 and create a chart showing their distribution",
+            "Find patients with asthma who had recent ER visits and analyze their medication patterns",
             "Show me all asthma patients aged 5-12 with recent ER visits",
             "Find patients with diabetes who haven't had HbA1c in 6 months",
             "What are the most common diagnoses for patients from ZIP code 77001?",
             "Search for clinical notes mentioning medication allergies",
-            "Analyze readmission patterns for heart conditions",
-            "Find patients with elevated BMI who need nutrition counseling"
+            "Analyze readmission patterns for heart conditions and identify high-risk patients",
+            "Find patients with elevated BMI, show their recent vitals, and identify those needing nutrition counseling"
         ]
         
         for i, example in enumerate(example_queries):
@@ -547,6 +550,8 @@ def _render_welcome_message():
     st.markdown("""
     ### 👋 Welcome to the AI Healthcare Assistant!
     
+    **🚀 Powered by Cortex Agents v2** with advanced multi-step reasoning and tool orchestration.
+    
     I can help you explore patient data and clinical documents using natural language. Here's what I can do:
     
     **🔍 Query Patient Data:**
@@ -559,12 +564,18 @@ def _render_welcome_message():
     - Search by symptoms, treatments, or medical terms
     - Access radiology reports and discharge summaries
     
-    **🤖 Intelligent Routing:**
-    - I automatically determine whether to query databases or search documents
-    - I can combine structured and unstructured data in responses
-    - I maintain context across our conversation
+    **🧠 Advanced v2 Capabilities:**
+    - **Multi-step reasoning**: I break down complex questions into logical steps
+    - **Tool orchestration**: I automatically combine multiple data sources
+    - **Conversation threads**: I maintain full context across our conversation
+    - **Execution traces**: View my reasoning process in Snowsight
     
-    **Try asking questions like:**
+    **Try asking complex questions that require multi-step analysis:**
+    - "Show me the top 5 diagnoses for patients aged 10-15 and create a chart showing their distribution"
+    - "Find patients with asthma who had recent ER visits and analyze their medication patterns"
+    - "Analyze readmission patterns for heart conditions and identify high-risk patients"
+    
+    **Or simpler queries:**
     - "Show me pediatric asthma patients with recent ER visits"
     - "Find notes mentioning drug allergies"
     - "What are the top diagnoses this month?"
