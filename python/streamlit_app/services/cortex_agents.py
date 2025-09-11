@@ -33,7 +33,13 @@ class CortexAgentsService:
         # Note: In SiS, we use the relative path, the base URL is handled by _snowflake module
         self.api_endpoint = "/api/v2/cortex/agent:run"
         self.api_timeout = 50000  # milliseconds
-        self.model = "claude-3-5-sonnet"
+        # Default orchestration model for persisted Agent
+        self.model = "claude-3-7-sonnet"
+
+        # Persisted Agent configuration
+        self.agent_name = "TCH_P360_AGENT"
+        self.agents_admin_endpoint = "/api/v2/cortex/agents"  # List/create agents
+        self.threads_endpoint = "/api/v2/cortex/threads"      # Create/delete threads
         
         # Healthcare-specific configuration  
         # Use the existing semantic model YAML file
@@ -49,7 +55,118 @@ class CortexAgentsService:
         # Healthcare system prompt
         self.system_prompt = self._get_healthcare_system_prompt()
         
+        # Ensure a persisted Agent exists (idempotent); ignore failures gracefully
+        try:
+            self.ensure_agent_exists()
+        except Exception as _e:
+            logger.warning(f"Agent ensure step skipped: {_e}")
+
         logger.info("CortexAgentsService initialized")
+
+    def ensure_agent_exists(self) -> None:
+        """Ensure a persisted Agent object exists; create it if missing.
+
+        Notes:
+            - Uses REST API to list agents and create when absent.
+            - Keeps instructions minimal; tools are still provided per run.
+        """
+        try:
+            # List existing agents
+            resp = _snowflake.send_snow_api_request(
+                "GET",
+                self.agents_admin_endpoint,
+                {"Content-Type": "application/json"},
+                {},
+                None,
+                None,
+                20000
+            )
+            content = getattr(resp, 'content', resp)
+            agents_list = []
+            try:
+                if isinstance(content, str):
+                    import json as _json
+                    parsed = _json.loads(content)
+                else:
+                    parsed = content
+                if isinstance(parsed, dict) and 'agents' in parsed:
+                    agents_list = parsed.get('agents') or []
+                elif isinstance(parsed, list):
+                    agents_list = parsed
+            except Exception:
+                agents_list = []
+
+            if any(isinstance(a, dict) and a.get('name') == self.agent_name for a in agents_list):
+                logger.info(f"Persisted Agent already exists: {self.agent_name}")
+                return
+
+            # Create agent with default model and instructions
+            payload = {
+                "name": self.agent_name,
+                "models": {"orchestration": self.model},
+                "instructions": self._get_healthcare_system_prompt()
+            }
+            create_resp = _snowflake.send_snow_api_request(
+                "POST",
+                self.agents_admin_endpoint,
+                {"Content-Type": "application/json"},
+                {},
+                payload,
+                None,
+                25000
+            )
+            status = getattr(create_resp, 'status', 200)
+            if status not in (200, 201):
+                logger.warning(f"Agent create returned status {status}; proceeding without persisted agent")
+            else:
+                logger.info(f"Persisted Agent created: {self.agent_name}")
+        except Exception as e:
+            logger.warning(f"Failed to verify/create Agent: {e}")
+
+    def create_thread(self) -> Optional[str]:
+        """Create a new Cortex thread and return thread_id."""
+        try:
+            resp = _snowflake.send_snow_api_request(
+                "POST",
+                self.threads_endpoint,
+                {"Content-Type": "application/json"},
+                {},
+                {},
+                None,
+                20000
+            )
+            content = getattr(resp, 'content', resp)
+            if isinstance(content, str):
+                import json as _json
+                content = _json.loads(content)
+            thread_id = None
+            if isinstance(content, dict):
+                thread_id = content.get('id') or content.get('thread_id')
+            return thread_id
+        except Exception as e:
+            logger.warning(f"Failed to create thread: {e}")
+            return None
+
+    def delete_thread(self, thread_id: str) -> bool:
+        """Delete an existing Cortex thread; returns True on success."""
+        if not thread_id:
+            return False
+        try:
+            endpoint = f"{self.threads_endpoint}/{thread_id}"
+            resp = _snowflake.send_snow_api_request(
+                "DELETE",
+                endpoint,
+                {"Content-Type": "application/json"},
+                {},
+                None,
+                None,
+                15000
+            )
+            status = getattr(resp, 'status', 200)
+            return status in (200, 204)
+        except Exception as e:
+            logger.warning(f"Failed to delete thread {thread_id}: {e}")
+            return False
     
     def _get_healthcare_system_prompt(self) -> str:
         """Get the healthcare-specific system prompt for the agent."""
@@ -144,6 +261,8 @@ Always provide context about the data timeframe and any limitations of your anal
         payload = {
             "model": self.model,
             "messages": messages,
+            # Prefer persisted agent when available
+            "agent": {"name": self.agent_name},
             "tools": [
                 {
                     "tool_spec": {

@@ -114,6 +114,10 @@ EXECUTE IMMEDIATE $stmt;
 SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/cortex/02_cortex_search_setup.sql''';
 EXECUTE IMMEDIATE $stmt;
 
+-- Cortex Agents setup (grants and validations for persisted agent usage)
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/cortex/03_cortex_agents_setup.sql''';
+EXECUTE IMMEDIATE $stmt;
+
 -- Copy Cortex Analyst semantic model YAMLs from Git repo into internal stage
 -- Copy YAMLs using PATTERN (see Snowflake COPY FILES docs)
 SET stmt = 'COPY FILES INTO @TCH_PATIENT_360_POC.AI_ML.SEMANTIC_MODEL_STAGE '

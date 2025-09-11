@@ -93,6 +93,10 @@ def get_cortex_config() -> Dict[str, Any]:
             'cortex_timeout': int(os.getenv('CORTEX_TIMEOUT', '30')),
             'cortex_max_retries': int(os.getenv('CORTEX_MAX_RETRIES', '3')),
             'cortex_fallback_enabled': os.getenv('CORTEX_FALLBACK_ENABLED', 'true').lower() == 'true',
+
+            # Persisted Cortex Agent
+            'cortex_agent_name': os.getenv('CORTEX_AGENT_NAME', 'TCH_P360_AGENT'),
+            'cortex_agent_model': os.getenv('CORTEX_AGENT_MODEL', 'claude-3-7-sonnet'),
             
             # Cortex Analyst Apps
             'analyst_patient_app': os.getenv('CORTEX_ANALYST_PATIENT_APP', 'TCH_PATIENT_ANALYTICS_APP'),

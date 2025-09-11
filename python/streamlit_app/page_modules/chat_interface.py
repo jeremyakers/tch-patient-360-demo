@@ -34,6 +34,14 @@ def render_chat_interface():
         st.subheader("💬 Conversation")
         
         if st.button("🔄 New Conversation", key="new_chat"):
+            try:
+                # Delete existing Cortex thread if present
+                if 'cortex_thread_id' in st.session_state and st.session_state.cortex_thread_id:
+                    from services import cortex_agents as _agents_service
+                    _agents_service.delete_thread(st.session_state.cortex_thread_id)
+            except Exception:
+                pass
+            st.session_state.cortex_thread_id = None
             st.session_state.chat_messages = []
             st.session_state.conversation_history = []
             st.rerun()
@@ -79,6 +87,14 @@ def render_chat_interface():
     
     if 'conversation_history' not in st.session_state:
         st.session_state.conversation_history = []
+
+    # Initialize Cortex thread once per session
+    if 'cortex_thread_id' not in st.session_state or not st.session_state.cortex_thread_id:
+        try:
+            from services import cortex_agents as _agents_service
+            st.session_state.cortex_thread_id = _agents_service.create_thread()
+        except Exception:
+            st.session_state.cortex_thread_id = None
     
     # Create a container for chat messages with fixed height to keep input at bottom
     chat_container = st.container()
@@ -446,6 +462,7 @@ def _process_user_query(query: str):
     with st.spinner("🤖 Processing your request with AI agents..."):
         try:
             # Send to Cortex Agents
+            # Include thread context implicitly via persisted agent; conversation_history retained for UI
             response = cortex_agents.send_message(query, st.session_state.conversation_history)
             
             if not response or "error" in response:
