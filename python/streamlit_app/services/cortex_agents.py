@@ -132,10 +132,13 @@ class CortexAgentsService:
             return
 
         # 2) Create when not found (404)
+        # Based on docs, the payload structure for creating an agent
         payload = {
             "name": self.agent_name,
-            "models": {"orchestration": self.model},
-            "instructions": self._get_healthcare_system_prompt()
+            "comment": "Texas Children's Hospital Patient 360 AI Assistant",
+            "profile": {
+                "display_name": "TCH Patient 360 Assistant"
+            }
         }
         create_resp = _snowflake.send_snow_api_request(
             "POST",
@@ -325,13 +328,20 @@ Always provide context about the data timeframe and any limitations of your anal
             ]
         })
         
-        # Build payload with tools configuration
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            # Prefer persisted agent when available (fully qualified)
-            "agent": {"database": self.agent_database, "schema": self.agent_schema, "name": self.agent_name},
-            "tools": [
+            # Build payload with tools configuration for v2 API
+            payload = {
+                "messages": messages,
+                # Reference the persisted agent (fully qualified)
+                "agent": {
+                    "database": self.agent_database, 
+                    "schema": self.agent_schema, 
+                    "name": self.agent_name
+                },
+                # Model is specified when using the agent
+                "model": self.model,
+                # Include thread_id if provided for conversation continuity
+                "thread_id": thread_id,
+                "tools": [
                 {
                     "tool_spec": {
                         "type": "cortex_analyst_text_to_sql",
@@ -360,8 +370,14 @@ Always provide context about the data timeframe and any limitations of your anal
         
         return payload
     
-    def send_message(self, user_message: str, conversation_history: List[Dict] = None) -> Optional[Dict]:
-        """Send a message to the Cortex Agent and get response with enhanced debugging."""
+    def send_message(self, user_message: str, conversation_history: List[Dict] = None, thread_id: str = None) -> Optional[Dict]:
+        """Send a message to the Cortex Agent and get response with enhanced debugging.
+        
+        Args:
+            user_message: The user's message to send
+            conversation_history: Previous messages in the conversation
+            thread_id: Optional thread ID for conversation continuity (v2 API)
+        """
         
         if conversation_history is None:
             conversation_history = []

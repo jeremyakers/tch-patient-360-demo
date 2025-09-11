@@ -37,8 +37,7 @@ def render_chat_interface():
             try:
                 # Delete existing Cortex thread if present
                 if 'cortex_thread_id' in st.session_state and st.session_state.cortex_thread_id:
-                    from services import cortex_agents as _agents_service
-                    _agents_service.delete_thread(st.session_state.cortex_thread_id)
+                    cortex_agents.delete_thread(st.session_state.cortex_thread_id)
             except Exception:
                 pass
             st.session_state.cortex_thread_id = None
@@ -461,9 +460,19 @@ def _process_user_query(query: str):
     # Get response from Cortex Agents
     with st.spinner("🤖 Processing your request with AI agents..."):
         try:
-            # Send to Cortex Agents
-            # Include thread context implicitly via persisted agent; conversation_history retained for UI
-            response = cortex_agents.send_message(query, st.session_state.conversation_history)
+            # Create thread if not exists (v2 API)
+            if 'cortex_thread_id' not in st.session_state or not st.session_state.cortex_thread_id:
+                thread_id = cortex_agents.create_thread()
+                if thread_id:
+                    st.session_state.cortex_thread_id = thread_id
+                    logger.info(f"Created new Cortex thread: {thread_id}")
+            
+            # Send to Cortex Agents with thread support
+            response = cortex_agents.send_message(
+                query, 
+                st.session_state.conversation_history,
+                thread_id=st.session_state.get('cortex_thread_id')
+            )
             
             if not response or "error" in response:
                 error_msg = response.get("error", "Unknown error") if response else "No response received"
