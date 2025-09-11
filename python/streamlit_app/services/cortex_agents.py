@@ -95,6 +95,21 @@ class CortexAgentsService:
                     return _json.loads(payload)
                 except Exception:
                     return {"_raw": payload}
+            # Some environments wrap as { status, content: "{...}" }
+            if isinstance(payload, dict) and isinstance(payload.get('content'), (str, bytes, bytearray)):
+                inner = payload.get('content')
+                if isinstance(inner, (bytes, bytearray)):
+                    try:
+                        inner = inner.decode('utf-8', errors='ignore')
+                    except Exception:
+                        pass
+                try:
+                    import json as _json
+                    return _json.loads(inner)
+                except Exception:
+                    # Preserve wrapper but include raw inner for debugging
+                    payload['_raw_content'] = inner
+                    return payload
             return payload
         parsed = _normalize(list_resp)
         agents = []
