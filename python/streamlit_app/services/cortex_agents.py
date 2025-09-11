@@ -81,14 +81,20 @@ class CortexAgentsService:
             None,
             20000
         )
-        status = getattr(get_resp, 'status', 0)
-        if status == 200:
-            logger.info(f"Persisted Agent exists: {self.agent_name}")
+        # If SiS returns no status on success, treat missing status as 200
+        if hasattr(get_resp, 'status'):
+            status = getattr(get_resp, 'status', 0)
+            if status == 200:
+                logger.info(f"Persisted Agent exists: {self.agent_name}")
+                return
+            if status != 404:
+                content = getattr(get_resp, 'content', '')
+                reason = getattr(get_resp, 'reason', '')
+                raise RuntimeError(f"Agent GET failed ({status} {reason}) @ {get_endpoint}: {str(content)[:500]}")
+        else:
+            # No status attribute typically indicates success in SiS
+            logger.info(f"Persisted Agent exists (status omitted): {self.agent_name}")
             return
-        if status not in (200, 404):
-            content = getattr(get_resp, 'content', '')
-            reason = getattr(get_resp, 'reason', '')
-            raise RuntimeError(f"Agent GET failed ({status} {reason}): {str(content)[:500]}")
 
         # 2) Create when not found (404)
         payload = {
@@ -105,12 +111,16 @@ class CortexAgentsService:
             None,
             25000
         )
-        cstatus = getattr(create_resp, 'status', 0)
-        if cstatus not in (200, 201):
-            ccontent = getattr(create_resp, 'content', '')
-            creason = getattr(create_resp, 'reason', '')
-            raise RuntimeError(f"Agent CREATE failed ({cstatus} {creason}): {str(ccontent)[:500]}")
-        logger.info(f"Persisted Agent created: {self.agent_name}")
+        if hasattr(create_resp, 'status'):
+            cstatus = getattr(create_resp, 'status', 0)
+            if cstatus not in (200, 201):
+                ccontent = getattr(create_resp, 'content', '')
+                creason = getattr(create_resp, 'reason', '')
+                raise RuntimeError(f"Agent CREATE failed ({cstatus} {creason}) @ {self.agents_admin_endpoint}: {str(ccontent)[:500]}")
+            logger.info(f"Persisted Agent created: {self.agent_name}")
+        else:
+            # Success path where status is omitted
+            logger.info(f"Persisted Agent created (status omitted): {self.agent_name}")
 
     def create_thread(self) -> Optional[str]:
         """Create a new Cortex thread and return thread_id."""
