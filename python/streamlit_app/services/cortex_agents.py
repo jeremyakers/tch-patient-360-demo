@@ -81,10 +81,18 @@ class CortexAgentsService:
             None,
             20000
         )
-        # If SiS returns no status on success, treat missing status as 200
+        # Validate response strictly. If status missing, parse content to confirm existence.
         if hasattr(get_resp, 'status'):
             status = getattr(get_resp, 'status', 0)
             if status == 200:
+                content = getattr(get_resp, 'content', '')
+                try:
+                    import json as _json
+                    parsed = _json.loads(content) if isinstance(content, str) else content
+                    if not (isinstance(parsed, dict) and (parsed.get('name') == self.agent_name or parsed.get('id'))):
+                        raise RuntimeError(f"Agent GET 200 but unexpected payload @ {get_endpoint}: {str(content)[:500]}")
+                except Exception:
+                    raise RuntimeError(f"Agent GET 200 but unparsable payload @ {get_endpoint}: {str(content)[:500]}")
                 logger.info(f"Persisted Agent exists: {self.agent_name}")
                 return
             if status != 404:
@@ -92,9 +100,17 @@ class CortexAgentsService:
                 reason = getattr(get_resp, 'reason', '')
                 raise RuntimeError(f"Agent GET failed ({status} {reason}) @ {get_endpoint}: {str(content)[:500]}")
         else:
-            # No status attribute typically indicates success in SiS
-            logger.info(f"Persisted Agent exists (status omitted): {self.agent_name}")
-            return
+            # Strictly require payload to confirm existence
+            content = getattr(get_resp, 'content', '')
+            try:
+                import json as _json
+                parsed = _json.loads(content) if isinstance(content, str) else content
+                if isinstance(parsed, dict) and (parsed.get('name') == self.agent_name or parsed.get('id')):
+                    logger.info(f"Persisted Agent exists (status omitted): {self.agent_name}")
+                    return
+                raise RuntimeError(f"Agent GET returned no status and unexpected payload @ {get_endpoint}: {str(content)[:500]}")
+            except Exception:
+                raise RuntimeError(f"Agent GET returned no status and unparsable payload @ {get_endpoint}: {str(content)[:500]}")
 
         # 2) Create when not found (404)
         payload = {
@@ -117,10 +133,32 @@ class CortexAgentsService:
                 ccontent = getattr(create_resp, 'content', '')
                 creason = getattr(create_resp, 'reason', '')
                 raise RuntimeError(f"Agent CREATE failed ({cstatus} {creason}) @ {self.agents_admin_endpoint}: {str(ccontent)[:500]}")
+            # Re-GET to verify existence
+            verify_resp = _snowflake.send_snow_api_request(
+                "GET",
+                get_endpoint,
+                {"Content-Type": "application/json"},
+                {},
+                None,
+                None,
+                20000
+            )
+            vstatus = getattr(verify_resp, 'status', 0)
+            vcontent = getattr(verify_resp, 'content', '')
+            if vstatus != 200:
+                raise RuntimeError(f"Agent VERIFY failed ({vstatus}) @ {get_endpoint}: {str(vcontent)[:500]}")
+            try:
+                import json as _json
+                vparsed = _json.loads(vcontent) if isinstance(vcontent, str) else vcontent
+                if not (isinstance(vparsed, dict) and (vparsed.get('name') == self.agent_name or vparsed.get('id'))):
+                    raise RuntimeError(f"Agent VERIFY unexpected payload @ {get_endpoint}: {str(vcontent)[:500]}")
+            except Exception:
+                raise RuntimeError(f"Agent VERIFY unparsable payload @ {get_endpoint}: {str(vcontent)[:500]}")
             logger.info(f"Persisted Agent created: {self.agent_name}")
         else:
-            # Success path where status is omitted
-            logger.info(f"Persisted Agent created (status omitted): {self.agent_name}")
+            # Missing status is not accepted for create; treat as error with payload
+            ccontent = getattr(create_resp, 'content', '')
+            raise RuntimeError(f"Agent CREATE returned no status @ {self.agents_admin_endpoint}: {str(ccontent)[:500]}")
 
     def create_thread(self) -> Optional[str]:
         """Create a new Cortex thread and return thread_id."""
