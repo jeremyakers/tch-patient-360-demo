@@ -356,32 +356,21 @@ Always provide context about the data timeframe and any limitations of your anal
         if thread_id is not None:
             payload["thread_id"] = thread_id
             
-        # Tools configuration - these override/supplement agent's configured tools
+        # TEMPORARY: Simplified tools configuration for debugging
+        # Start with just the analyst tool to isolate issues
         payload["tools"] = [
                 {
                     "tool_spec": {
                         "type": "cortex_analyst_text_to_sql",
                         "name": "healthcare_analyst"
                     }
-                },
-                {
-                    "tool_spec": {
-                        "type": "cortex_search",
-                        "name": "clinical_document_search"
-                    }
                 }
         ]
         
-        # Tool resources configuration
+        # Tool resources configuration - simplified
         payload["tool_resources"] = {
             "healthcare_analyst": {
-                "semantic_model_file": getattr(self, 'semantic_model_file_chat', self.semantic_model_file)
-            },
-            "clinical_document_search": {
-                "name": self.search_services["clinical_docs"],
-                "max_results": int(st.session_state.get('cortex_search_max_results', 50)) if 'st' in globals() else 50,
-                "id_column": "file_path",
-                "title_column": "MRN"
+                "semantic_model_file": self.semantic_model_file  # Use the standard one, not chat version
             }
         }
         
