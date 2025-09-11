@@ -131,10 +131,29 @@ class CortexAgentsService:
             None,
             25000
         )
-        # Require explicit status for create
+        # Require explicit status for create; if missing, verify via LIST and surface full context on failure
         if not hasattr(create_resp, 'status'):
+            # Verify existence immediately
+            verify_resp = _snowflake.send_snow_api_request(
+                "GET",
+                list_endpoint,
+                {"Content-Type": "application/json"},
+                {},
+                None,
+                None,
+                20000
+            )
+            vparsed = _normalize(verify_resp)
+            vagents = vparsed.get('agents') if isinstance(vparsed, dict) else (vparsed if isinstance(vparsed, list) else [])
+            if any(isinstance(a, dict) and a.get('name') == self.agent_name for a in (vagents or [])):
+                logger.info(f"Persisted Agent created (status omitted but verified via LIST): {self.agent_name}")
+                return
+            # Not found: raise with rich context
             ccontent = getattr(create_resp, 'content', '')
-            raise RuntimeError(f"Agent CREATE returned no status @ {self.agents_admin_endpoint}: {str(ccontent)[:500]}")
+            raise RuntimeError(
+                f"Agent CREATE returned no status and verify failed @ {self.agents_admin_endpoint}: "
+                f"create_content={str(ccontent)[:300]} verify_sample={str(vparsed)[:300]}"
+            )
         cstatus = getattr(create_resp, 'status', 0)
         if cstatus not in (200, 201):
             ccontent = getattr(create_resp, 'content', '')
