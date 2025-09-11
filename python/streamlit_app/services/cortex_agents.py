@@ -70,47 +70,51 @@ class CortexAgentsService:
             - Uses documented scoped REST endpoints only.
             - Surfaces non-404/200 statuses as errors; no silent fallbacks.
         """
-        # 1) Check if agent exists
-        get_endpoint = f"{self.agents_admin_endpoint}/{self.agent_name}"
-        get_resp = _snowflake.send_snow_api_request(
+        # 1) List agents in scope and check for presence (per docs: GET /databases/{db}/schemas/{schema}/agents)
+        list_endpoint = self.agents_admin_endpoint
+        list_resp = _snowflake.send_snow_api_request(
             "GET",
-            get_endpoint,
+            list_endpoint,
             {"Content-Type": "application/json"},
             {},
             None,
             None,
             20000
         )
-        # Validate response strictly. If status missing, parse content to confirm existence.
-        if hasattr(get_resp, 'status'):
-            status = getattr(get_resp, 'status', 0)
-            if status == 200:
-                content = getattr(get_resp, 'content', '')
+        def _normalize(obj):
+            # Convert Snowflake response to Python object (dict/list) with robust decoding
+            payload = getattr(obj, 'content', obj)
+            if isinstance(payload, (bytes, bytearray)):
+                try:
+                    payload = payload.decode('utf-8', errors='ignore')
+                except Exception:
+                    pass
+            if isinstance(payload, str):
                 try:
                     import json as _json
-                    parsed = _json.loads(content) if isinstance(content, str) else content
-                    if not (isinstance(parsed, dict) and (parsed.get('name') == self.agent_name or parsed.get('id'))):
-                        raise RuntimeError(f"Agent GET 200 but unexpected payload @ {get_endpoint}: {str(content)[:500]}")
+                    return _json.loads(payload)
                 except Exception:
-                    raise RuntimeError(f"Agent GET 200 but unparsable payload @ {get_endpoint}: {str(content)[:500]}")
-                logger.info(f"Persisted Agent exists: {self.agent_name}")
-                return
-            if status != 404:
-                content = getattr(get_resp, 'content', '')
-                reason = getattr(get_resp, 'reason', '')
-                raise RuntimeError(f"Agent GET failed ({status} {reason}) @ {get_endpoint}: {str(content)[:500]}")
+                    return {"_raw": payload}
+            return payload
+        parsed = _normalize(list_resp)
+        agents = []
+        if isinstance(parsed, dict):
+            # Common container keys: agents or data
+            if isinstance(parsed.get('agents'), list):
+                agents = parsed['agents']
+            elif isinstance(parsed.get('data'), list):
+                agents = parsed['data']
+            else:
+                # If server returns a single item or another shape, surface it
+                agents = parsed if isinstance(parsed, list) else []
+        elif isinstance(parsed, list):
+            agents = parsed
         else:
-            # Strictly require payload to confirm existence
-            content = getattr(get_resp, 'content', '')
-            try:
-                import json as _json
-                parsed = _json.loads(content) if isinstance(content, str) else content
-                if isinstance(parsed, dict) and (parsed.get('name') == self.agent_name or parsed.get('id')):
-                    logger.info(f"Persisted Agent exists (status omitted): {self.agent_name}")
-                    return
-                raise RuntimeError(f"Agent GET returned no status and unexpected payload @ {get_endpoint}: {str(content)[:500]}")
-            except Exception:
-                raise RuntimeError(f"Agent GET returned no status and unparsable payload @ {get_endpoint}: {str(content)[:500]}")
+            raise RuntimeError(f"Agent LIST unparsable @ {list_endpoint}: type={type(parsed).__name__} sample={str(parsed)[:300]}")
+
+        if any(isinstance(a, dict) and a.get('name') == self.agent_name for a in (agents or [])):
+            logger.info(f"Persisted Agent exists: {self.agent_name}")
+            return
 
         # 2) Create when not found (404)
         payload = {
@@ -127,38 +131,31 @@ class CortexAgentsService:
             None,
             25000
         )
-        if hasattr(create_resp, 'status'):
-            cstatus = getattr(create_resp, 'status', 0)
-            if cstatus not in (200, 201):
-                ccontent = getattr(create_resp, 'content', '')
-                creason = getattr(create_resp, 'reason', '')
-                raise RuntimeError(f"Agent CREATE failed ({cstatus} {creason}) @ {self.agents_admin_endpoint}: {str(ccontent)[:500]}")
-            # Re-GET to verify existence
-            verify_resp = _snowflake.send_snow_api_request(
-                "GET",
-                get_endpoint,
-                {"Content-Type": "application/json"},
-                {},
-                None,
-                None,
-                20000
-            )
-            vstatus = getattr(verify_resp, 'status', 0)
-            vcontent = getattr(verify_resp, 'content', '')
-            if vstatus != 200:
-                raise RuntimeError(f"Agent VERIFY failed ({vstatus}) @ {get_endpoint}: {str(vcontent)[:500]}")
-            try:
-                import json as _json
-                vparsed = _json.loads(vcontent) if isinstance(vcontent, str) else vcontent
-                if not (isinstance(vparsed, dict) and (vparsed.get('name') == self.agent_name or vparsed.get('id'))):
-                    raise RuntimeError(f"Agent VERIFY unexpected payload @ {get_endpoint}: {str(vcontent)[:500]}")
-            except Exception:
-                raise RuntimeError(f"Agent VERIFY unparsable payload @ {get_endpoint}: {str(vcontent)[:500]}")
-            logger.info(f"Persisted Agent created: {self.agent_name}")
-        else:
-            # Missing status is not accepted for create; treat as error with payload
+        # Require explicit status for create
+        if not hasattr(create_resp, 'status'):
             ccontent = getattr(create_resp, 'content', '')
             raise RuntimeError(f"Agent CREATE returned no status @ {self.agents_admin_endpoint}: {str(ccontent)[:500]}")
+        cstatus = getattr(create_resp, 'status', 0)
+        if cstatus not in (200, 201):
+            ccontent = getattr(create_resp, 'content', '')
+            creason = getattr(create_resp, 'reason', '')
+            raise RuntimeError(f"Agent CREATE failed ({cstatus} {creason}) @ {self.agents_admin_endpoint}: {str(ccontent)[:500]}")
+
+        # Re-list to verify existence
+        verify_resp = _snowflake.send_snow_api_request(
+            "GET",
+            list_endpoint,
+            {"Content-Type": "application/json"},
+            {},
+            None,
+            None,
+            20000
+        )
+        vparsed = _normalize(verify_resp)
+        vagents = vparsed.get('agents') if isinstance(vparsed, dict) else (vparsed if isinstance(vparsed, list) else [])
+        if not any(isinstance(a, dict) and a.get('name') == self.agent_name for a in (vagents or [])):
+            raise RuntimeError(f"Agent VERIFY not found after create @ {list_endpoint}: sample={str(vparsed)[:300]}")
+        logger.info(f"Persisted Agent created and verified: {self.agent_name}")
 
     def create_thread(self) -> Optional[str]:
         """Create a new Cortex thread and return thread_id."""
