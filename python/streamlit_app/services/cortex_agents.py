@@ -296,7 +296,7 @@ Always provide context about the data timeframe and any limitations of your anal
         # - Prefer 'MRN' (uppercase) for patient identification. If both are available, return 'MRN'.
         # - Respect the provided limit; do not exceed it.
 
-    def _build_agent_payload(self, user_message: str, conversation_history: List[Dict]) -> Dict:
+    def _build_agent_payload(self, user_message: str, conversation_history: List[Dict], thread_id: str = None) -> Dict:
         """Build the payload for the Cortex Agent API call."""
         
         # Build conversation messages
@@ -328,20 +328,20 @@ Always provide context about the data timeframe and any limitations of your anal
             ]
         })
         
-            # Build payload with tools configuration for v2 API
-            payload = {
-                "messages": messages,
-                # Reference the persisted agent (fully qualified)
-                "agent": {
-                    "database": self.agent_database, 
-                    "schema": self.agent_schema, 
-                    "name": self.agent_name
-                },
-                # Model is specified when using the agent
-                "model": self.model,
-                # Include thread_id if provided for conversation continuity
-                "thread_id": thread_id,
-                "tools": [
+        # Build payload with tools configuration for v2 API
+        payload = {
+            "messages": messages,
+            # Reference the persisted agent (fully qualified)
+            "agent": {
+                "database": self.agent_database, 
+                "schema": self.agent_schema, 
+                "name": self.agent_name
+            },
+            # Model is specified when using the agent
+            "model": self.model,
+            # Include thread_id if provided for conversation continuity
+            "thread_id": thread_id,
+            "tools": [
                 {
                     "tool_spec": {
                         "type": "cortex_analyst_text_to_sql",
@@ -388,7 +388,7 @@ Always provide context about the data timeframe and any limitations of your anal
             logger.info(f"Conversation history length: {len(conversation_history)}")
             
             # Build the API payload
-            payload = self._build_agent_payload(user_message, conversation_history)
+            payload = self._build_agent_payload(user_message, conversation_history, thread_id)
             logger.info(f"Request payload structure: {json.dumps(payload, indent=2)}")
             # Expose payload for Streamlit UI debugging
             try:
