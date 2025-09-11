@@ -407,7 +407,8 @@ Always provide context about the data timeframe and any limitations of your anal
             
             # Build the API payload
             payload = self._build_agent_payload(user_message, conversation_history, thread_id)
-            logger.info(f"Request payload structure: {json.dumps(payload, indent=2)}")
+            logger.info(f"AGENTS DEBUG: Built payload with keys: {list(payload.keys())}")
+            logger.info(f"AGENTS DEBUG: Payload structure: {json.dumps(payload, indent=2)}")
             # Expose payload for Streamlit UI debugging
             try:
                 if st is not None:
@@ -423,9 +424,11 @@ Always provide context about the data timeframe and any limitations of your anal
             logger.info(f"Search services: {self.search_services}")
             
             # Make the API call using positional arguments
-            logger.info("Making API call to Cortex Agents...")
-            logger.info(f"Final endpoint: {self.api_endpoint}")
-            logger.info(f"Payload keys: {list(payload.keys())}")
+            logger.info(f"AGENTS DEBUG: Making API call to endpoint: {self.api_endpoint}")
+            logger.info(f"AGENTS DEBUG: Agent database: {self.agent_database}")
+            logger.info(f"AGENTS DEBUG: Agent schema: {self.agent_schema}")
+            logger.info(f"AGENTS DEBUG: Agent name: {self.agent_name}")
+            logger.info(f"AGENTS DEBUG: Payload size: {len(str(payload))} characters")
             
             # Log to telemetry before API call
             try:
@@ -433,12 +436,15 @@ Always provide context about the data timeframe and any limitations of your anal
                     INSERT INTO SNOWFLAKE.TELEMETRY.EVENTS_VIEW (VALUE) 
                     SELECT 'TCH_AGENTS_API_CALL: endpoint={self.api_endpoint} payload_size={len(str(payload))}'
                 """).collect()
-            except Exception:
-                pass  # Ignore telemetry errors
+                logger.info("AGENTS DEBUG: Telemetry event logged successfully")
+            except Exception as e:
+                logger.warning(f"AGENTS DEBUG: Telemetry logging failed: {e}")
                 
             # Ensure cortex_search tool input includes MRN and file_path columns
             # No unsupported columns injection; rely on id_column per docs
 
+            logger.info("AGENTS DEBUG: About to call _snowflake.send_snow_api_request")
+            
             response = _snowflake.send_snow_api_request(
                 "POST",                              # method
                 self.api_endpoint,                   # endpoint 
@@ -449,17 +455,23 @@ Always provide context about the data timeframe and any limitations of your anal
                 30000                                # timeout_ms
             )
             
-            logger.info(f"Raw response type: {type(response)}")
-            logger.info(f"Raw response attributes: {dir(response)}")
+            logger.info(f"AGENTS DEBUG: API call completed")
+            logger.info(f"AGENTS DEBUG: Raw response type: {type(response)}")
+            logger.info(f"AGENTS DEBUG: Raw response attributes: {dir(response)}")
+            if hasattr(response, 'status'):
+                logger.info(f"AGENTS DEBUG: Response status: {response.status}")
+            if hasattr(response, 'reason'):
+                logger.info(f"AGENTS DEBUG: Response reason: {response.reason}")
             
             # Enhanced response handling with detailed debugging
             if hasattr(response, 'status'):
-                logger.info(f"Response status: {response.status}")
+                logger.info(f"AGENTS DEBUG: Processing response with status: {response.status}")
                 if response.status != 200:
                     error_reason = getattr(response, 'reason', 'Unknown reason')
                     error_content = getattr(response, 'content', 'No content')
-                    logger.error(f"API Error - Status: {response.status}, Reason: {error_reason}")
-                    logger.error(f"Error content: {error_content}")
+                    logger.error(f"AGENTS ERROR: API Error - Status: {response.status}, Reason: {error_reason}")
+                    logger.error(f"AGENTS ERROR: Error content: {error_content}")
+                    logger.error(f"AGENTS ERROR: Full response object: {response}")
                     return {
                         "error": f"HTTP Error: {response.status} - {error_reason}",
                         "status_code": response.status,
@@ -473,8 +485,10 @@ Always provide context about the data timeframe and any limitations of your anal
             
             # Parse response content
             if hasattr(response, 'content'):
-                logger.info(f"Response content type: {type(response.content)}")
-                logger.info(f"Response content (first 500 chars): {str(response.content)[:500]}")
+                logger.info(f"AGENTS DEBUG: Response content type: {type(response.content)}")
+                logger.info(f"AGENTS DEBUG: Response content (first 1000 chars): {str(response.content)[:1000]}")
+                if len(str(response.content)) > 1000:
+                    logger.info(f"AGENTS DEBUG: Response content truncated, total length: {len(str(response.content))}")
                 
                 try:
                     if isinstance(response.content, str):
@@ -482,7 +496,12 @@ Always provide context about the data timeframe and any limitations of your anal
                     else:
                         response_content = response.content
                     
-                    logger.info(f"Parsed response structure: {json.dumps(response_content, indent=2) if isinstance(response_content, dict) else str(response_content)}")
+                    logger.info(f"AGENTS DEBUG: Successfully parsed JSON response")
+                    if isinstance(response_content, dict):
+                        logger.info(f"AGENTS DEBUG: Response is dict with keys: {list(response_content.keys())}")
+                        logger.info(f"AGENTS DEBUG: Full parsed response: {json.dumps(response_content, indent=2)}")
+                    else:
+                        logger.info(f"AGENTS DEBUG: Response is {type(response_content)}: {response_content}")
                     
                     # Check for error events in the response
                     if isinstance(response_content, list):
@@ -507,6 +526,7 @@ Always provide context about the data timeframe and any limitations of your anal
                                     }
                                 }
                     
+                    logger.info("AGENTS DEBUG: Returning successful response")
                     logger.info("=== CORTEX AGENTS DEBUG END ===")
                     return response_content
                     

@@ -87,26 +87,29 @@ def render_chat_interface():
         st.markdown("---")
         st.subheader("🔍 Debug Panel")
         
-        # Show last request payload if available
-        if 'last_agents_request_payload' in st.session_state:
-            with st.expander("📤 Last Request Payload"):
-                st.json(st.session_state['last_agents_request_payload'])
-        
-        # Show thread information
-        thread_id = st.session_state.get('cortex_thread_id')
-        if thread_id:
-            st.success(f"🧵 Thread: {thread_id[:8]}...")
-        else:
-            st.info("🧵 No active thread")
-            
-        # Show agent endpoint being used
+        # Show agent configuration
         try:
             from services.cortex_agents import CortexAgentsService
             agent_service = CortexAgentsService()
             st.info(f"🤖 Agent: {agent_service.agent_name}")
             st.info(f"🔗 Endpoint: {agent_service.api_endpoint}")
+            st.info(f"📊 Model: {agent_service.model}")
         except Exception as e:
             st.warning(f"⚠️ Agent info unavailable: {e}")
+            
+        # Show thread information
+        thread_id = st.session_state.get('cortex_thread_id')
+        if thread_id:
+            st.success(f"🧵 Thread: {thread_id[:8]}...")
+        else:
+            st.info("🧵 No active thread (disabled for debugging)")
+            
+        st.info("📜 All debug details are logged - check application logs for full trace")
+        
+        # Show logging status
+        import logging
+        logger = logging.getLogger(__name__)
+        st.info(f"📝 Logger level: {logger.level}")
     
     # Initialize session state for chat
     if 'chat_messages' not in st.session_state:
@@ -497,8 +500,9 @@ def _process_user_query(query: str):
             #         logger.info(f"Created new Cortex thread: {thread_id}")
             
             # Send to Cortex Agents WITHOUT thread support for debugging
-            st.info(f"🔍 DEBUG: Sending query to agent endpoint: {cortex_agents.api_endpoint}")
-            st.info(f"🔍 DEBUG: Agent name: {cortex_agents.agent_name}")
+            logger.info(f"DEBUG: Sending query to agent endpoint: {cortex_agents.api_endpoint}")
+            logger.info(f"DEBUG: Agent name: {cortex_agents.agent_name}")
+            logger.info(f"DEBUG: Query: {query}")
             
             response = cortex_agents.send_message(
                 query, 
@@ -506,39 +510,44 @@ def _process_user_query(query: str):
                 thread_id=None  # Temporarily disable threads
             )
             
-            st.info(f"🔍 DEBUG: Response type: {type(response)}, keys: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")
-            
-            # Show raw response for debugging
-            if response:
-                with st.expander("🔍 Raw Response Debug"):
-                    st.json(response)
+            logger.info(f"DEBUG: Response received - type: {type(response)}")
+            if isinstance(response, dict):
+                logger.info(f"DEBUG: Response keys: {list(response.keys())}")
+                logger.info(f"DEBUG: Full response: {response}")
+            else:
+                logger.info(f"DEBUG: Response content: {response}")
             
             if not response or "error" in response:
                 error_msg = response.get("error", "Unknown error") if response else "No response received"
                 
-                # Enhanced error logging and display
-                logger.error(f"Chat interface error: {error_msg}")
-                logger.error(f"Full response object: {response}")
+                # Enhanced error logging
+                logger.error(f"CHAT ERROR: {error_msg}")
+                logger.error(f"CHAT ERROR - Full response object: {response}")
                 
-                # Create detailed error message for user
-                detailed_error = f"❌ I encountered an error: {error_msg}"
-                
-                # Add debug information if available
+                # Log debug information if available
                 if response and isinstance(response, dict):
                     if 'debug_info' in response:
                         debug_info = response['debug_info']
-                        detailed_error += f"\n\n**Debug Information:**"
-                        detailed_error += f"\n- Endpoint: {debug_info.get('endpoint', 'Unknown')}"
-                        detailed_error += f"\n- Error Type: {response.get('exception_type', 'Unknown')}"
+                        logger.error(f"CHAT ERROR - Debug Info: {debug_info}")
+                        logger.error(f"CHAT ERROR - Endpoint: {debug_info.get('endpoint', 'Unknown')}")
+                        logger.error(f"CHAT ERROR - Error Type: {response.get('exception_type', 'Unknown')}")
                         
                     if 'full_traceback' in response:
-                        with st.expander("🔍 Technical Details (for debugging)"):
-                            st.code(response['full_traceback'], language='python')
+                        logger.error(f"CHAT ERROR - Full Traceback: {response['full_traceback']}")
+                        
+                    if 'error_code' in response:
+                        logger.error(f"CHAT ERROR - Error Code: {response['error_code']}")
+                        
+                    if 'status_code' in response:
+                        logger.error(f"CHAT ERROR - Status Code: {response['status_code']}")
+                
+                # Simple error message for user (no debug clutter)
+                error_display = f"❌ I encountered an error: {error_msg}"
                 
                 # Add error to chat history
                 st.session_state.chat_messages.append({
                     "role": "assistant",
-                    "content": detailed_error,
+                    "content": error_display,
                     "error_details": response if response else None
                 })
                 st.rerun()
@@ -549,6 +558,7 @@ def _process_user_query(query: str):
             
             if not response_text:
                 response_text = "I received your query but couldn't generate a meaningful response. Please try rephrasing your question."
+                logger.warning("CHAT WARNING: Empty response_text from process_agent_response")
             
             # Execute SQL if present
             results = None
