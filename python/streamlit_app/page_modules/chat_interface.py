@@ -82,6 +82,31 @@ def render_chat_interface():
             help="Controls how many documents Cortex Search can return in AI Chat (via Cortex Agents)."
         )
         st.session_state['cortex_search_max_results'] = int(max_docs)
+        
+        # Debug panel for troubleshooting
+        st.markdown("---")
+        st.subheader("🔍 Debug Panel")
+        
+        # Show last request payload if available
+        if 'last_agents_request_payload' in st.session_state:
+            with st.expander("📤 Last Request Payload"):
+                st.json(st.session_state['last_agents_request_payload'])
+        
+        # Show thread information
+        thread_id = st.session_state.get('cortex_thread_id')
+        if thread_id:
+            st.success(f"🧵 Thread: {thread_id[:8]}...")
+        else:
+            st.info("🧵 No active thread")
+            
+        # Show agent endpoint being used
+        try:
+            from services.cortex_agents import CortexAgentsService
+            agent_service = CortexAgentsService()
+            st.info(f"🤖 Agent: {agent_service.agent_name}")
+            st.info(f"🔗 Endpoint: {agent_service.api_endpoint}")
+        except Exception as e:
+            st.warning(f"⚠️ Agent info unavailable: {e}")
     
     # Initialize session state for chat
     if 'chat_messages' not in st.session_state:
@@ -480,10 +505,29 @@ def _process_user_query(query: str):
             if not response or "error" in response:
                 error_msg = response.get("error", "Unknown error") if response else "No response received"
                 
+                # Enhanced error logging and display
+                logger.error(f"Chat interface error: {error_msg}")
+                logger.error(f"Full response object: {response}")
+                
+                # Create detailed error message for user
+                detailed_error = f"❌ I encountered an error: {error_msg}"
+                
+                # Add debug information if available
+                if response and isinstance(response, dict):
+                    if 'debug_info' in response:
+                        debug_info = response['debug_info']
+                        detailed_error += f"\n\n**Debug Information:**"
+                        detailed_error += f"\n- Endpoint: {debug_info.get('endpoint', 'Unknown')}"
+                        detailed_error += f"\n- Error Type: {response.get('exception_type', 'Unknown')}"
+                        
+                    if 'full_traceback' in response:
+                        with st.expander("🔍 Technical Details (for debugging)"):
+                            st.code(response['full_traceback'], language='python')
+                
                 # Add error to chat history
                 st.session_state.chat_messages.append({
                     "role": "assistant",
-                    "content": f"❌ I encountered an error: {error_msg}",
+                    "content": detailed_error,
                     "error_details": response if response else None
                 })
                 st.rerun()

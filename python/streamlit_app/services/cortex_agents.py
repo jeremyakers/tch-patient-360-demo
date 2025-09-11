@@ -398,6 +398,18 @@ Always provide context about the data timeframe and any limitations of your anal
             logger.info(f"=== CORTEX AGENTS DEBUG START ===")
             logger.info(f"User message: {user_message}")
             logger.info(f"Conversation history length: {len(conversation_history)}")
+            logger.info(f"Thread ID: {thread_id}")
+            logger.info(f"Agent endpoint: {self.api_endpoint}")
+            logger.info(f"Agent name: {self.agent_name}")
+            
+            # Log to telemetry for debugging
+            try:
+                self.session.sql(f"""
+                    INSERT INTO SNOWFLAKE.TELEMETRY.EVENTS_VIEW (VALUE) 
+                    SELECT 'TCH_AGENTS_DEBUG: Starting request for user_message={user_message[:50]}... thread_id={thread_id}'
+                """).collect()
+            except Exception:
+                pass  # Ignore telemetry errors
             
             # Build the API payload
             payload = self._build_agent_payload(user_message, conversation_history, thread_id)
@@ -418,6 +430,18 @@ Always provide context about the data timeframe and any limitations of your anal
             
             # Make the API call using positional arguments
             logger.info("Making API call to Cortex Agents...")
+            logger.info(f"Final endpoint: {self.api_endpoint}")
+            logger.info(f"Payload keys: {list(payload.keys())}")
+            
+            # Log to telemetry before API call
+            try:
+                self.session.sql(f"""
+                    INSERT INTO SNOWFLAKE.TELEMETRY.EVENTS_VIEW (VALUE) 
+                    SELECT 'TCH_AGENTS_API_CALL: endpoint={self.api_endpoint} payload_size={len(str(payload))}'
+                """).collect()
+            except Exception:
+                pass  # Ignore telemetry errors
+                
             # Ensure cortex_search tool input includes MRN and file_path columns
             # No unsupported columns injection; rely on id_column per docs
 
