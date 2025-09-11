@@ -162,7 +162,12 @@ class CortexAgentsService:
                 20000
             )
             vparsed = _normalize(verify_resp)
-            vagents = vparsed.get('agents') if isinstance(vparsed, dict) else (vparsed if isinstance(vparsed, list) else [])
+            # Look for agents in either 'agents' or 'data' key (API returns 'data')
+            vagents = []
+            if isinstance(vparsed, dict):
+                vagents = vparsed.get('data', vparsed.get('agents', []))
+            elif isinstance(vparsed, list):
+                vagents = vparsed
             if any(isinstance(a, dict) and a.get('name') == self.agent_name for a in (vagents or [])):
                 logger.info(f"Persisted Agent created (status omitted but verified via LIST): {self.agent_name}")
                 return
@@ -189,7 +194,12 @@ class CortexAgentsService:
             20000
         )
         vparsed = _normalize(verify_resp)
-        vagents = vparsed.get('agents') if isinstance(vparsed, dict) else (vparsed if isinstance(vparsed, list) else [])
+        # Look for agents in either 'agents' or 'data' key (API returns 'data')
+        vagents = []
+        if isinstance(vparsed, dict):
+            vagents = vparsed.get('data', vparsed.get('agents', []))
+        elif isinstance(vparsed, list):
+            vagents = vparsed
         if not any(isinstance(a, dict) and a.get('name') == self.agent_name for a in (vagents or [])):
             raise RuntimeError(f"Agent VERIFY not found after create @ {list_endpoint}: sample={str(vparsed)[:300]}")
         logger.info(f"Persisted Agent created and verified: {self.agent_name}")
