@@ -38,7 +38,10 @@ class CortexAgentsService:
 
         # Persisted Agent configuration
         self.agent_name = "TCH_P360_AGENT"
-        self.agents_admin_endpoint = "/api/v2/cortex/agents"  # List/create agents
+        self.agent_database = "TCH_PATIENT_360_POC"
+        self.agent_schema = "AI_ML"
+        # List/create agents within database/schema scope
+        self.agents_admin_endpoint = f"/api/v2/databases/{self.agent_database}/schemas/{self.agent_schema}/agents"
         self.threads_endpoint = "/api/v2/cortex/threads"      # Create/delete threads
         
         # Healthcare-specific configuration  
@@ -261,8 +264,8 @@ Always provide context about the data timeframe and any limitations of your anal
         payload = {
             "model": self.model,
             "messages": messages,
-            # Prefer persisted agent when available
-            "agent": {"name": self.agent_name},
+            # Prefer persisted agent when available (fully qualified)
+            "agent": {"database": self.agent_database, "schema": self.agent_schema, "name": self.agent_name},
             "tools": [
                 {
                     "tool_spec": {
