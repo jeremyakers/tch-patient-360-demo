@@ -609,21 +609,22 @@ Always provide context about the data timeframe and any limitations of your anal
                 "full_traceback": traceback.format_exc()
             }
     
-    def process_agent_response(self, response: Dict) -> Tuple[str, Optional[str], List[Dict]]:
+    def process_agent_response(self, response: Dict) -> Tuple[str, Optional[str], List[Dict], List[str]]:
         """
-        Process the agent response and extract text, SQL, and citations.
+        Process the agent response and extract text, SQL, citations, and thinking steps.
         
         Returns:
-            Tuple of (response_text, sql_query, citations)
+            Tuple of (response_text, sql_query, citations, thinking_steps)
         """
         
         response_text = ""
         sql_query = None
         citations = []
+        thinking_steps = []
         
         if not response or "error" in response:
             error_msg = response.get("error", "Unknown error") if response else "No response received"
-            return f"Error: {error_msg}", None, []
+            return f"Error: {error_msg}", None, [], []
         
         try:
             # Process streaming response format
@@ -697,6 +698,13 @@ Always provide context about the data timeframe and any limitations of your anal
                                     # This is the final assistant response - append all text content
                                     response_text += text_content
                                     logger.debug(f"Extracted assistant text: {text_content[:200]}...")
+                                
+                                # Extract thinking steps
+                                elif content_type == "thinking":
+                                    thinking_text = content_item.get("text", "")
+                                    if thinking_text:
+                                        thinking_steps.append(thinking_text)
+                                        logger.debug(f"Extracted thinking step: {thinking_text[:100]}...")
                                 
                                 # Process tool results
                                 elif content_type == "tool_result":
@@ -808,7 +816,7 @@ Always provide context about the data timeframe and any limitations of your anal
             response_text = response_text.replace("【†", "[")
             response_text = response_text.replace("†】", "]")
         
-        return response_text, sql_query, citations
+        return response_text, sql_query, citations, thinking_steps
     
     def execute_sql_query(self, sql_query: str) -> Optional[Any]:
         """Execute a SQL query and return the results."""

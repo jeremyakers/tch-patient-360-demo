@@ -144,6 +144,16 @@ def render_chat_interface():
                     # Display assistant response
                     st.markdown(message['content'])
                     
+                    # Display thinking steps if present (v2 Agent feature)
+                    if 'thinking_steps' in message and message['thinking_steps']:
+                        with st.expander("🧠 Agent Reasoning Process (v2 Multi-step Thinking)", expanded=False):
+                            st.markdown("**See how the agent broke down your request step by step:**")
+                            for i, thinking_step in enumerate(message['thinking_steps'], 1):
+                                st.markdown(f"**Step {i}:**")
+                                st.markdown(f"> {thinking_step}")
+                                if i < len(message['thinking_steps']):
+                                    st.markdown("---")
+                    
                     # Display SQL if present
                     if 'sql' in message and message['sql']:
                         st.markdown("### 🔍 Generated SQL Query")
@@ -554,7 +564,7 @@ def _process_user_query(query: str):
                 return
             
             # Process the response
-            response_text, sql_query, citations = cortex_agents.process_agent_response(response)
+            response_text, sql_query, citations, thinking_steps = cortex_agents.process_agent_response(response)
             
             if not response_text:
                 response_text = "I received your query but couldn't generate a meaningful response. Please try rephrasing your question."
@@ -576,7 +586,8 @@ def _process_user_query(query: str):
                 "content": response_text,
                 "sql": sql_query,
                 "citations": citations,
-                "results": results
+                "results": results,
+                "thinking_steps": thinking_steps
             }
             
             st.session_state.chat_messages.append(assistant_message)
