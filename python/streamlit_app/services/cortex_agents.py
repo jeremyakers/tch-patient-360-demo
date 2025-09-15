@@ -668,34 +668,51 @@ Always provide context about the data timeframe and any limitations of your anal
                                             "relevance_score": sc
                                         })
             
-            # Process raw JSON string response (from debug output format)
+            # Process raw JSON string response (from v2 API streaming format)
             elif isinstance(response, dict) and "content" in response:
                 # Parse the JSON string content
                 try:
                     content_str = response["content"]
                     if isinstance(content_str, str):
-                        events = json.loads(content_str)
+                        # Parse the streaming events format
+                        events = json.loads(content_str) if content_str.startswith('[') else []
                     else:
-                        events = content_str
+                        events = content_str if isinstance(content_str, list) else []
                     
-                    # Process the list of events
-                    if isinstance(events, list):
-                        for event in events:
-                            if event.get("event") == "message.delta":
-                                data = event.get("data", {})
-                                delta = data.get("delta", {})
+                    # Process the list of events from v2 API
+                    for event in events:
+                        event_type = event.get("event")
+                        
+                        # Handle the main response event
+                        if event_type == "response":
+                            data = event.get("data", {})
+                            content_items = data.get("content", [])
+                            
+                            for content_item in content_items:
+                                content_type = content_item.get("type")
                                 
-                                for content_item in delta.get("content", []):
-                                    content_type = content_item.get("type")
-                                    
-                                    if content_type == "tool_results":
-                                        tool_results = content_item.get("tool_results", {})
-                                        if "content" in tool_results:
-                                            for result in tool_results["content"]:
-                                                if result.get("type") == "json":
-                                                    json_data = result.get("json", {})
-                                                    response_text += json_data.get("text", "")
-                                                    search_results = json_data.get("searchResults", [])
+                                # Extract text content from the assistant's response
+                                if content_type == "text":
+                                    text_content = content_item.get("text", "")
+                                    if text_content and "I attempted to query" in text_content:
+                                        # This is the final assistant response
+                                        response_text = text_content
+                                        logger.debug(f"Extracted assistant response: {response_text[:200]}...")
+                                
+                                # Process tool results
+                                elif content_type == "tool_result":
+                                    tool_content = content_item.get("content", [])
+                                    for tool_item in tool_content:
+                                        if tool_item.get("type") == "json":
+                                            json_data = tool_item.get("json", {})
+                                            
+                                            # Extract SQL if present
+                                            if "sql" in json_data:
+                                                sql_query = json_data["sql"]
+                                                logger.debug(f"Extracted SQL: {sql_query[:100]}...")
+                                            
+                                            # Extract search results
+                                            search_results = json_data.get("searchResults", [])
                                                     for search_result in search_results:
                                                         # Extract the file_path from doc_id since id_column maps file_path to doc_id
                                                         doc_id_value = search_result.get("doc_id", "")
@@ -731,6 +748,7 @@ Always provide context about the data timeframe and any limitations of your anal
                                         logger.debug(f"Added text content: {text_content[:50]}...")
                 except (json.JSONDecodeError, KeyError) as e:
                     logger.error(f"Failed to parse events from content: {e}")
+                    logger.debug(f"Raw content for debugging: {str(response.get('content', ''))[:500]}...")
                     
             # Process event-based streaming format (if applicable)
             elif isinstance(response, list):
