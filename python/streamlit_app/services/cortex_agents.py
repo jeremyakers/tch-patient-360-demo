@@ -43,8 +43,8 @@ class CortexAgentsService:
         self.agent_schema = "AI_ML"
         # List/create agents within database/schema scope
         self.agents_admin_endpoint = f"/api/v2/databases/{self.agent_database}/schemas/{self.agent_schema}/agents"
-        # TEMPORARY: Use non-persisted agent endpoint due to 404 on persisted endpoint
-        # TODO: Fix persisted agent endpoint once we understand the correct format
+        # Use v2 agent:run endpoint with agent reference in payload
+        # This is the correct v2 API format for running a persisted agent
         self.api_endpoint = "/api/v2/cortex/agent:run"
         # Threads are scoped to the agent
         self.threads_endpoint = f"/api/v2/databases/{self.agent_database}/schemas/{self.agent_schema}/agents/{self.agent_name}/threads"
@@ -363,21 +363,53 @@ Always provide context about the data timeframe and any limitations of your anal
         if thread_id is not None:
             payload["thread_id"] = thread_id
             
-        # TEMPORARY: Simplified tools configuration for debugging
-        # Start with just the analyst tool to isolate issues
+        # Tools configuration for v2 API
         payload["tools"] = [
-                {
-                    "tool_spec": {
-                        "type": "cortex_analyst_text_to_sql",
-                        "name": "healthcare_analyst"
-                    }
+            {
+                "tool_spec": {
+                    "type": "cortex_analyst_text_to_sql",
+                    "name": "healthcare_analyst"
                 }
+            },
+            {
+                "tool_spec": {
+                    "type": "cortex_search",
+                    "name": "clinical_notes_search"
+                }
+            },
+            {
+                "tool_spec": {
+                    "type": "cortex_search",
+                    "name": "radiology_search"
+                }
+            }
         ]
         
-        # Tool resources configuration - simplified
+        # Tool resources configuration with execution_environment for v2 API
         payload["tool_resources"] = {
             "healthcare_analyst": {
-                "semantic_model_file": self.semantic_model_file  # Use the standard one, not chat version
+                "semantic_model_file": self.semantic_model_file,  # Use the standard one, not chat version
+                "execution_environment": {
+                    "database": self.agent_database,
+                    "schema": self.agent_schema,
+                    "warehouse": "TCH_AI_ML_WH"  # Use the AI/ML warehouse for Cortex operations
+                }
+            },
+            "clinical_notes_search": {
+                "search_service": self.search_services.get('clinical_notes', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH'),
+                "execution_environment": {
+                    "database": self.agent_database,
+                    "schema": self.agent_schema,
+                    "warehouse": "TCH_AI_ML_WH"
+                }
+            },
+            "radiology_search": {
+                "search_service": self.search_services.get('radiology', 'TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH'),
+                "execution_environment": {
+                    "database": self.agent_database,
+                    "schema": self.agent_schema,
+                    "warehouse": "TCH_AI_ML_WH"
+                }
             }
         }
         
