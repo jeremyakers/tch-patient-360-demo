@@ -15,6 +15,7 @@ import logging
 from typing import Dict, List, Tuple, Optional, Any
 import _snowflake
 from snowflake.snowpark.context import get_active_session
+from .cortex_agents_parser import parse_v2_agent_response
 try:
     import streamlit as st
 except Exception:
@@ -617,14 +618,19 @@ Always provide context about the data timeframe and any limitations of your anal
             Tuple of (response_text, sql_query, citations, thinking_steps)
         """
         
+        if not response or "error" in response:
+            error_msg = response.get("error", "Unknown error") if response else "No response received"
+            return f"Error: {error_msg}", None, [], []
+        
+        # Use the dedicated v2 parser for complex response structures
+        if isinstance(response, dict) and "content" in response:
+            return parse_v2_agent_response(response)
+        
+        # Fallback for other response types
         response_text = ""
         sql_query = None
         citations = []
         thinking_steps = []
-        
-        if not response or "error" in response:
-            error_msg = response.get("error", "Unknown error") if response else "No response received"
-            return f"Error: {error_msg}", None, [], []
         
         try:
             # Process streaming response format
