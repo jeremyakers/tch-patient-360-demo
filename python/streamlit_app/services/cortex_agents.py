@@ -713,39 +713,37 @@ Always provide context about the data timeframe and any limitations of your anal
                                             
                                             # Extract search results
                                             search_results = json_data.get("searchResults", [])
-                                                    for search_result in search_results:
-                                                        # Extract the file_path from doc_id since id_column maps file_path to doc_id
-                                                        doc_id_value = search_result.get("doc_id", "")
-                                                        sc = search_result.get("score", 0) or 0
-                                                        try:
-                                                            sc = float(sc)
-                                                        except Exception:
-                                                            sc = 0.0
-                                                        citations.append({
-                                                            "source_id": search_result.get("source_id", ""),
-                                                            "doc_id": doc_id_value,
-                                                            "document_id": search_result.get("document_id", ""),
-                                                            "file_id": search_result.get("file_id", ""),
-                                                            "note_id": search_result.get("note_id", ""),
-                                                            "file_path": doc_id_value,  # Use doc_id as file_path since id_column maps file_path to doc_id
-                                                            "mrn": search_result.get("mrn", "") or search_result.get("MRN", ""),
-                                                            "patient_name": search_result.get("patient_name", ""),
-                                                            "document_type": search_result.get("document_type", ""),
-                                                            "document_date": search_result.get("document_date", ""),
-                                                            "author": search_result.get("author", ""),
-                                                            "department": search_result.get("department", ""),
-                                                            "source_system": search_result.get("source_system", ""),
-                                                            "text": search_result.get("text", "")[:200] + "..." if len(search_result.get("text", "")) > 200 else search_result.get("text", ""),
-                                                            "relevance_score": sc
-                                                        })
-                                                    
-                                                    if "sql" in json_data:
-                                                        sql_query = json_data["sql"]
-                                    
-                                    elif content_type == "text":
-                                        text_content = content_item.get("text", "")
-                                        response_text += text_content
-                                        logger.debug(f"Added text content: {text_content[:50]}...")
+                                            for search_result in search_results:
+                                                # Extract the file_path from doc_id since id_column maps file_path to doc_id
+                                                doc_id_value = search_result.get("doc_id", "")
+                                                sc = search_result.get("score", 0) or 0
+                                                try:
+                                                    sc = float(sc)
+                                                except Exception:
+                                                    sc = 0.0
+                                                citations.append({
+                                                    "source_id": search_result.get("source_id", ""),
+                                                    "doc_id": doc_id_value,
+                                                    "document_id": search_result.get("document_id", ""),
+                                                    "file_id": search_result.get("file_id", ""),
+                                                    "note_id": search_result.get("note_id", ""),
+                                                    "file_path": doc_id_value,  # Use doc_id as file_path since id_column maps file_path to doc_id
+                                                    "mrn": search_result.get("mrn", "") or search_result.get("MRN", ""),
+                                                    "patient_name": search_result.get("patient_name", ""),
+                                                    "document_type": search_result.get("document_type", ""),
+                                                    "document_date": search_result.get("document_date", ""),
+                                                    "author": search_result.get("author", ""),
+                                                    "department": search_result.get("department", ""),
+                                                    "source_system": search_result.get("source_system", ""),
+                                                    "text": search_result.get("text", "")[:200] + "..." if len(search_result.get("text", "")) > 200 else search_result.get("text", ""),
+                                                    "relevance_score": sc
+                                                })
+                                
+                                # Extract text content from the assistant's response
+                                elif content_type == "text":
+                                    text_content = content_item.get("text", "")
+                                    response_text += text_content
+                                    logger.debug(f"Added text content: {text_content[:50]}...")
                 except (json.JSONDecodeError, KeyError) as e:
                     logger.error(f"Failed to parse events from content: {e}")
                     logger.debug(f"Raw content for debugging: {str(response.get('content', ''))[:500]}...")
