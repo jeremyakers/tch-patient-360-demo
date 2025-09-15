@@ -31,10 +31,16 @@ class SSEProcessor:
             # Log what type of response we got
             logger.debug(f"Processing response type: {type(response)}")
             
-            # Check if response has content
+            # Check if response has content (either as attribute or dict key)
+            content = None
             if hasattr(response, 'content'):
                 content = response.content
                 logger.debug(f"Response has content attribute, type: {type(content)}")
+            elif isinstance(response, dict) and 'content' in response:
+                content = response['content']
+                logger.debug(f"Response is dict with content key, type: {type(content)}")
+            
+            if content is not None:
                 
                 # Parse the content as JSON
                 if isinstance(content, str):
