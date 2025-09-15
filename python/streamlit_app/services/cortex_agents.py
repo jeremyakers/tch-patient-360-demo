@@ -694,10 +694,9 @@ Always provide context about the data timeframe and any limitations of your anal
                                 # Extract text content from the assistant's response
                                 if content_type == "text":
                                     text_content = content_item.get("text", "")
-                                    if text_content and "I attempted to query" in text_content:
-                                        # This is the final assistant response
-                                        response_text = text_content
-                                        logger.debug(f"Extracted assistant response: {response_text[:200]}...")
+                                    # This is the final assistant response - append all text content
+                                    response_text += text_content
+                                    logger.debug(f"Extracted assistant text: {text_content[:200]}...")
                                 
                                 # Process tool results
                                 elif content_type == "tool_result":
