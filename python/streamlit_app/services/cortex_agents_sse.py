@@ -28,13 +28,34 @@ class SSEProcessor:
             Dict with event type and data for real-time UI updates
         """
         try:
-            # Check if response has streaming content
-            if hasattr(response, 'content') and isinstance(response.content, str):
-                # Parse the entire response as JSON array of events
-                events = json.loads(response.content) if response.content else []
+            # Log what type of response we got
+            logger.debug(f"Processing response type: {type(response)}")
+            
+            # Check if response has content
+            if hasattr(response, 'content'):
+                content = response.content
+                logger.debug(f"Response has content attribute, type: {type(content)}")
                 
-                for event in events:
+                # Parse the content as JSON
+                if isinstance(content, str):
+                    try:
+                        events = json.loads(content) if content else []
+                        logger.debug(f"Parsed {len(events)} events from JSON")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse JSON: {e}")
+                        logger.debug(f"Content preview: {content[:500]}")
+                        yield {
+                            "type": "error",
+                            "message": f"Failed to parse response: {e}"
+                        }
+                        return
+                else:
+                    events = content if isinstance(content, list) else []
+                    
+                # Process each event
+                for i, event in enumerate(events):
                     event_type = event.get("event")
+                    logger.debug(f"Processing event {i}: {event_type}")
                     
                     if event_type == "response":
                         # Process response event with all content
@@ -59,6 +80,13 @@ class SSEProcessor:
                             "thinking_steps": self.current_thinking,
                             "search_results": self.search_results
                         }
+            else:
+                # Response doesn't have content attribute
+                logger.error(f"Response has no content attribute: {response}")
+                yield {
+                    "type": "error",
+                    "message": "Invalid response format"
+                }
                         
         except Exception as e:
             logger.error(f"SSE processing error: {e}")
@@ -167,7 +195,9 @@ def send_message_with_streaming(
     
     try:
         # Make the API call
-        logger.info(f"Sending request to: {api_endpoint}")
+        logger.info(f"SSE: Sending request to: {api_endpoint}")
+        logger.debug(f"SSE: Payload keys: {list(payload.keys())}")
+        
         response = _snowflake.send_snow_api_request(
             "POST",
             api_endpoint,
@@ -178,11 +208,21 @@ def send_message_with_streaming(
             timeout
         )
         
+        logger.info(f"SSE: Received response, type: {type(response)}")
+        
         # Process the SSE stream
-        yield from processor.process_sse_stream(response)
+        event_count = 0
+        for event in processor.process_sse_stream(response):
+            event_count += 1
+            logger.debug(f"SSE: Yielding event {event_count}: {event.get('type')}")
+            yield event
+        
+        logger.info(f"SSE: Stream completed with {event_count} events")
         
     except Exception as e:
-        logger.error(f"Streaming API call failed: {e}")
+        logger.error(f"SSE: Streaming API call failed: {e}")
+        import traceback
+        logger.error(f"SSE: Traceback: {traceback.format_exc()}")
         yield {
             "type": "error",
             "message": str(e)
