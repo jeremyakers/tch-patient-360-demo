@@ -680,11 +680,11 @@ Always provide context about the data timeframe and any limitations of your anal
                     else:
                         events = content_str if isinstance(content_str, list) else []
                     
-                    # Process the list of events from v2 API
+                    # Process the list of events from v2 API streaming format
                     for event in events:
                         event_type = event.get("event")
                         
-                        # Handle the main response event
+                        # Handle the main response event with full content
                         if event_type == "response":
                             data = event.get("data", {})
                             content_items = data.get("content", [])
@@ -692,21 +692,20 @@ Always provide context about the data timeframe and any limitations of your anal
                             for content_item in content_items:
                                 content_type = content_item.get("type")
                                 
-                                # Extract text content from the assistant's response
-                                if content_type == "text":
-                                    text_content = content_item.get("text", "")
-                                    # This is the final assistant response - append all text content
-                                    response_text += text_content
-                                    logger.debug(f"Extracted assistant text: {text_content[:200]}...")
-                                
-                                # Extract thinking steps
-                                elif content_type == "thinking":
+                                # Extract thinking steps from thinking content
+                                if content_type == "thinking":
                                     thinking_text = content_item.get("text", "")
                                     if thinking_text:
                                         thinking_steps.append(thinking_text)
                                         logger.debug(f"Extracted thinking step: {thinking_text[:100]}...")
                                 
-                                # Process tool results
+                                # Extract final assistant text response
+                                elif content_type == "text":
+                                    text_content = content_item.get("text", "")
+                                    response_text += text_content
+                                    logger.debug(f"Extracted assistant text: {text_content[:200]}...")
+                                
+                                # Process tool results to extract SQL and search results
                                 elif content_type == "tool_result":
                                     tool_content = content_item.get("content", [])
                                     for tool_item in tool_content:
@@ -754,6 +753,28 @@ Always provide context about the data timeframe and any limitations of your anal
                 except (json.JSONDecodeError, KeyError) as e:
                     logger.error(f"Failed to parse events from content: {e}")
                     logger.debug(f"Raw content for debugging: {str(response.get('content', ''))[:500]}...")
+                    
+                    # FALLBACK: Try to extract from raw telemetry data in content string
+                    content_str = response.get("content", "")
+                    if isinstance(content_str, str):
+                        # Extract thinking from telemetry
+                        if "thinking_response" in content_str:
+                            import re
+                            thinking_match = re.search(r'"thinking_response":\s*{[^}]*"stringValue":\s*"([^"]*)', content_str)
+                            if thinking_match:
+                                thinking_text = thinking_match.group(1).replace('\\n', '\n').replace('\\', '')
+                                thinking_steps.append(thinking_text)
+                                logger.debug(f"Extracted thinking from telemetry: {thinking_text[:100]}...")
+                        
+                        # Extract SQL from telemetry
+                        if '"sql":' in content_str:
+                            import re
+                            sql_matches = re.findall(r'"sql":\s*"([^"]*)', content_str)
+                            for sql_match in sql_matches:
+                                if sql_match and 'SELECT' in sql_match.upper():
+                                    sql_query = sql_match.replace('\\n', '\n').replace('\\', '')
+                                    logger.debug(f"Extracted SQL from telemetry: {sql_query[:100]}...")
+                                    break
                     
             # Process event-based streaming format (if applicable)
             elif isinstance(response, list):
