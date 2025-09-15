@@ -15,6 +15,7 @@ from datetime import datetime
 import logging
 
 from services import cortex_agents, data_service, session_manager
+from services.cortex_agents_sse import send_message_with_streaming
 from utils import helpers
 
 logger = logging.getLogger(__name__)
@@ -498,37 +499,111 @@ def _process_user_query(query: str):
         "content": query
     })
     
-    # Get response from Cortex Agents
-    with st.spinner("🤖 Processing your request with AI agents..."):
-        try:
-            # TEMPORARY: Skip thread creation for debugging
-            # Create thread if not exists (v2 API)
-            # if 'cortex_thread_id' not in st.session_state or not st.session_state.cortex_thread_id:
-            #     thread_id = cortex_agents.create_thread()
-            #     if thread_id:
-            #         st.session_state.cortex_thread_id = thread_id
-            #         logger.info(f"Created new Cortex thread: {thread_id}")
+    # Get response from Cortex Agents with SSE streaming
+    response_container = st.container()
+    thinking_container = st.container()
+    
+    # Initialize response components
+    thinking_steps = []
+    sql_query = None
+    search_results = []
+    final_response = ""
+    error_occurred = False
+    
+    with thinking_container:
+        thinking_expander = st.expander("🧠 Agent Thinking Process (Live)", expanded=True)
+        
+    with response_container:
+        with st.spinner("🤖 Processing your request with AI agents..."):
+            try:
+                # Build the payload
+                logger.info(f"DEBUG: Building payload for query: {query}")
+                payload = cortex_agents._build_agent_payload(
+                    query,
+                    st.session_state.conversation_history,
+                    thread_id=None  # Temporarily disable threads
+                )
+                
+                logger.info(f"DEBUG: Sending to endpoint: {cortex_agents.api_endpoint}")
+                
+                # Stream the response
+                step_count = 0
+                for event in send_message_with_streaming(
+                    cortex_agents.api_endpoint,
+                    payload,
+                    timeout=60000
+                ):
+                    event_type = event.get("type")
+                    logger.debug(f"SSE Event: {event_type}")
+                    
+                    if event_type == "thinking":
+                        # Show thinking step in real-time
+                        step_count += 1
+                        thinking_text = event["text"]
+                        thinking_steps.append(thinking_text)
+                        with thinking_expander:
+                            st.markdown(f"**Step {step_count}:** {thinking_text[:300]}...")
+                    
+                    elif event_type == "tool_use":
+                        # Show tool being used
+                        with thinking_expander:
+                            st.info(f"🔧 Using tool: **{event['tool_name']}**")
+                            if event.get("query"):
+                                st.code(event["query"][:300] + "...", language="text")
+                    
+                    elif event_type == "sql":
+                        # Capture and show SQL query
+                        sql_query = event["query"]
+                        with thinking_expander:
+                            st.success("✅ Generated SQL query")
+                            with st.expander("View SQL", expanded=False):
+                                st.code(sql_query, language="sql")
+                    
+                    elif event_type == "search_results":
+                        # Capture search results
+                        search_results = event.get("results", [])
+                        with thinking_expander:
+                            st.success(f"✅ Found {event['count']} search results")
+                    
+                    elif event_type == "response_text":
+                        # Update final response
+                        final_response = event["text"]
+                        logger.info(f"DEBUG: Received final response text")
+                    
+                    elif event_type == "done":
+                        # Finalize the response
+                        logger.info("DEBUG: Stream completed")
+                        break
+                    
+                    elif event_type == "error":
+                        error_msg = event.get('message', 'Unknown error')
+                        st.error(f"Error: {error_msg}")
+                        logger.error(f"CHAT ERROR: {error_msg}")
+                        error_occurred = True
+                        break
+                
+                # Collapse thinking expander after completion
+                thinking_expander.expanded = False
+                
+                # Create response dict for compatibility
+                response = {
+                    "content": final_response,
+                    "sql": sql_query,
+                    "thinking_steps": thinking_steps,
+                    "citations": search_results
+                } if final_response else None
             
-            # Send to Cortex Agents WITHOUT thread support for debugging
-            logger.info(f"DEBUG: Sending query to agent endpoint: {cortex_agents.api_endpoint}")
-            logger.info(f"DEBUG: Agent name: {cortex_agents.agent_name}")
-            logger.info(f"DEBUG: Query: {query}")
+            except Exception as e:
+                logger.error(f"Error during streaming: {e}")
+                st.error(f"Error: {str(e)}")
+                error_occurred = True
+                response = None
             
-            response = cortex_agents.send_message(
-                query, 
-                st.session_state.conversation_history,
-                thread_id=None  # Temporarily disable threads
-            )
-            
-            logger.info(f"DEBUG: Response received - type: {type(response)}")
-            if isinstance(response, dict):
-                logger.info(f"DEBUG: Response keys: {list(response.keys())}")
-                logger.info(f"DEBUG: Full response: {response}")
-            else:
-                logger.info(f"DEBUG: Response content: {response}")
-            
-            if not response or "error" in response:
-                error_msg = response.get("error", "Unknown error") if response else "No response received"
+            if error_occurred:
+                return
+                
+            if not response or not final_response:
+                error_msg = "No response received from the agent"
                 
                 # Enhanced error logging
                 logger.error(f"CHAT ERROR: {error_msg}")
@@ -563,12 +638,13 @@ def _process_user_query(query: str):
                 st.rerun()
                 return
             
-            # Process the response
-            response_text, sql_query, citations, thinking_steps = cortex_agents.process_agent_response(response)
+            # Use the streamed response directly
+            response_text = final_response
+            citations = search_results
             
             if not response_text:
                 response_text = "I received your query but couldn't generate a meaningful response. Please try rephrasing your question."
-                logger.warning("CHAT WARNING: Empty response_text from process_agent_response")
+                logger.warning("CHAT WARNING: Empty response_text from streaming")
             
             # Execute SQL if present
             results = None
@@ -607,15 +683,6 @@ def _process_user_query(query: str):
             # Limit conversation history to last 10 exchanges
             if len(st.session_state.conversation_history) > 20:
                 st.session_state.conversation_history = st.session_state.conversation_history[-20:]
-            
-        except Exception as e:
-            logger.error(f"Error processing query: {e}")
-            
-            # Add error to chat history
-            st.session_state.chat_messages.append({
-                "role": "assistant",
-                "content": f"❌ An unexpected error occurred: {str(e)}"
-            })
     
     # Trigger rerun to display the new messages
     st.rerun()
