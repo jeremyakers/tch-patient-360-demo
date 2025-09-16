@@ -5,6 +5,7 @@ Processes streaming responses in real-time for UI updates.
 
 import json
 import logging
+import time
 from typing import Dict, Generator, Optional, Any
 import _snowflake
 
@@ -116,6 +117,8 @@ class SSEProcessor:
                 
                 if thinking_text:
                     self.current_thinking.append(thinking_text)
+                    # Add small delay to simulate streaming
+                    time.sleep(0.1)
                     yield {
                         "type": "thinking",
                         "text": thinking_text,
@@ -135,6 +138,8 @@ class SSEProcessor:
                     "input": tool_input
                 })
                 
+                # Add small delay to simulate streaming
+                time.sleep(0.05)
                 yield {
                     "type": "tool_use",
                     "tool_type": tool_type,
@@ -154,6 +159,8 @@ class SSEProcessor:
                         # Extract SQL if present
                         if "sql" in json_data:
                             self.current_sql = json_data["sql"]
+                            # Add small delay to simulate streaming
+                            time.sleep(0.05)
                             yield {
                                 "type": "sql",
                                 "query": self.current_sql,
@@ -164,6 +171,8 @@ class SSEProcessor:
                         search_results = json_data.get("search_results", json_data.get("searchResults", []))
                         if search_results:
                             self.search_results.extend(search_results[:5])  # Limit to 5
+                            # Add small delay to simulate streaming
+                            time.sleep(0.05)
                             yield {
                                 "type": "search_results",
                                 "count": len(search_results),
@@ -175,6 +184,8 @@ class SSEProcessor:
                 text = item.get("text", "")
                 if text:
                     self.current_text = text
+                    # Add small delay to simulate streaming
+                    time.sleep(0.05)
                     yield {
                         "type": "response_text",
                         "text": text
