@@ -5,6 +5,7 @@ Processes streaming responses in real-time for UI updates.
 
 import json
 import logging
+import time
 from typing import Dict, Generator, Optional, Any, List
 import _snowflake
 
@@ -304,7 +305,10 @@ def send_message_with_streaming(
     timeout: int = 60000
 ) -> Generator[Dict, None, None]:
     """
-    Send message to Cortex Agents API and yield SSE events.
+    Send message to Cortex Agents API and yield events one by one.
+    
+    Since _snowflake.send_snow_api_request doesn't support true SSE streaming,
+    we get the complete response and yield events one by one to simulate streaming.
     
     Args:
         api_endpoint: The API endpoint URL
@@ -317,9 +321,9 @@ def send_message_with_streaming(
     processor = SSEProcessor()
     
     try:
-        # Make the API call
+        # Make the API call with stream: true in payload
         logger.info(f"SSE: Sending request to: {api_endpoint}")
-        logger.debug(f"SSE: Payload keys: {list(payload.keys())}")
+        logger.debug(f"SSE: Payload has stream={payload.get('stream', False)}")
         
         response = _snowflake.send_snow_api_request(
             "POST",
@@ -333,12 +337,30 @@ def send_message_with_streaming(
         
         logger.info(f"SSE: Received response, type: {type(response)}")
         
-        # Process the SSE stream
+        # Process the complete response and yield events one by one
+        # This simulates streaming for the UI
         event_count = 0
-        for event in processor.process_sse_stream(response):
+        
+        # Collect all events first
+        all_events = list(processor.process_sse_stream(response))
+        logger.info(f"SSE: Processed {len(all_events)} events from response")
+        
+        # Yield events one by one with small delays for UI updates
+        for event in all_events:
             event_count += 1
-            logger.debug(f"SSE: Yielding event {event_count}: {event.get('type')}")
+            event_type = event.get('type')
+            logger.debug(f"SSE: Yielding event {event_count}: {event_type}")
+            
+            # Yield the event
             yield event
+            
+            # Small delay between events to allow UI to update
+            # This creates the "live" effect even though we have all data
+            if event_type in ['thinking', 'tool_use']:
+                time.sleep(0.05)  # 50ms delay for thinking/tool events
+            elif event_type in ['sql', 'search_results']:
+                time.sleep(0.02)  # 20ms delay for results
+            # No delay for final response or errors
         
         logger.info(f"SSE: Stream completed with {event_count} events")
         
