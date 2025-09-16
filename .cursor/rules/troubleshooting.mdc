@@ -1,0 +1,316 @@
+---
+alwaysApply: true
+---
+
+# TCH Patient 360 PoC - Troubleshooting & Debugging Standards
+
+## Snowflake Telemetry Access
+
+### Query Execution Logs
+When troubleshooting deployment or query issues, access Snowflake telemetry directly:
+
+```sql
+-- Query telemetry events for debugging
+SELECT * FROM SNOWFLAKE.TELEMETRY.EVENTS_VIEW 
+WHERE VALUE LIKE '%error%' 
+OR VALUE LIKE '%failed%'
+ORDER BY TIMESTAMP DESC 
+LIMIT 100;
+
+-- Search for specific deployment steps
+SELECT * FROM SNOWFLAKE.TELEMETRY.EVENTS_VIEW 
+WHERE VALUE LIKE '%TCH_PATIENT_360%'
+ORDER BY TIMESTAMP DESC;
+
+-- Find Dynamic Table refresh issues
+SELECT * FROM SNOWFLAKE.TELEMETRY.EVENTS_VIEW 
+WHERE VALUE LIKE '%DYNAMIC_TABLE%'
+AND VALUE LIKE '%error%'
+ORDER BY TIMESTAMP DESC;
+```
+
+**Note**: The `VALUE` column contains the actual log text output from Snowflake operations.
+
+## SnowCLI Command Structure
+
+### Standard SnowCLI Connection Pattern
+Use this exact command structure for all manual SnowCLI operations:
+
+```bash
+snow sql -q "SELECT * FROM my_table;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+### Authentication Methods
+
+#### Password Authentication
+Set password in environment variable (recommended for security):
+```bash
+export SNOWFLAKE_PASSWORD=my_password
+
+# Then run SnowCLI commands without password in command line
+snow sql -q "SELECT CURRENT_USER();" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+#### Keypair Authentication
+Add private key path flag:
+```bash
+snow sql -q "SELECT CURRENT_USER();" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH \
+  --private-key-path keypair/rsa_key.p8
+```
+
+## Common Troubleshooting Queries
+
+### Deployment Verification
+```bash
+# Check database and schema creation
+snow sql -q "SHOW DATABASES LIKE 'TCH_PATIENT_360_POC';" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+
+# Verify Dynamic Tables status
+snow sql -q "SELECT table_name, target_lag, last_refresh_time, refresh_mode 
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE table_type = 'DYNAMIC TABLE' 
+ORDER BY table_name;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+
+# Check data loading status across all source systems
+snow sql -q "
+SELECT 'EPIC.PATIENTS' as table_name, COUNT(*) as row_count FROM EPIC.PATIENTS
+UNION ALL
+SELECT 'EPIC.ENCOUNTERS', COUNT(*) FROM EPIC.ENCOUNTERS  
+UNION ALL
+SELECT 'WORKDAY.PROVIDERS', COUNT(*) FROM WORKDAY.PROVIDERS
+UNION ALL
+SELECT 'WORKDAY.DEPARTMENTS', COUNT(*) FROM WORKDAY.DEPARTMENTS
+UNION ALL
+SELECT 'ORACLE_ERP.ENCOUNTER_FINANCIALS', COUNT(*) FROM ORACLE_ERP.ENCOUNTER_FINANCIALS
+UNION ALL
+SELECT 'SALESFORCE.PATIENT_PORTAL_ACTIVITY', COUNT(*) FROM SALESFORCE.PATIENT_PORTAL_ACTIVITY
+ORDER BY table_name;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+### Multi-Source Integration Verification
+```bash
+# Verify patient data integration across all source systems
+snow sql -q "
+SELECT 
+    COUNT(DISTINCT pm.patient_id) as total_patients,
+    COUNT(DISTINCT ff.patient_key) as patients_with_financial_data,
+    COUNT(DISTINCT ef.patient_key) as patients_with_engagement_data,
+    COUNT(DISTINCT pd.provider_id) as total_providers,
+    COUNT(DISTINCT dd.department_id) as total_departments
+FROM CONFORMED.PATIENT_MASTER pm
+LEFT JOIN CONFORMED.FINANCIAL_FACT ff ON pm.patient_key = ff.patient_key
+LEFT JOIN CONFORMED.ENGAGEMENT_FACT ef ON pm.patient_key = ef.patient_key
+CROSS JOIN (SELECT COUNT(DISTINCT provider_id) as provider_id FROM CONFORMED.PROVIDER_DIM) pd
+CROSS JOIN (SELECT COUNT(DISTINCT department_id) as department_id FROM CONFORMED.DEPARTMENT_DIM) dd
+WHERE pm.is_current = TRUE;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+### Performance Troubleshooting
+```bash
+# Check warehouse usage and query performance
+snow sql -q "
+SELECT 
+    warehouse_name,
+    query_type,
+    total_elapsed_time,
+    bytes_scanned,
+    rows_produced,
+    start_time
+FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
+WHERE warehouse_name IN ('TCH_COMPUTE_WH', 'TCH_ANALYTICS_WH', 'TCH_AI_ML_WH')
+AND start_time >= DATEADD('hour', -24, CURRENT_TIMESTAMP())
+ORDER BY total_elapsed_time DESC
+LIMIT 20;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+
+# Check Dynamic Table refresh performance
+snow sql -q "
+SELECT 
+    table_name,
+    target_lag,
+    actual_lag,
+    last_refresh_time,
+    refresh_duration_ms,
+    data_timestamp
+FROM INFORMATION_SCHEMA.TABLE_STORAGE_METRICS tsm
+JOIN INFORMATION_SCHEMA.TABLES t ON tsm.table_name = t.table_name
+WHERE t.table_type = 'DYNAMIC TABLE'
+AND tsm.table_schema = 'CONFORMED'
+ORDER BY refresh_duration_ms DESC;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+### Cortex Services Troubleshooting
+```bash
+# Check Cortex Search service status
+snow sql -q "SHOW CORTEX SEARCH SERVICES;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_AI_ML_WH
+
+# Verify Streamlit app deployment
+snow sql -q "SHOW STREAMLITS;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_ANALYTICS_WH
+```
+
+### Data Quality Validation
+```bash
+# Check for data quality issues across source systems
+snow sql -q "
+-- Check for orphaned records
+SELECT 'Encounters without patients' as issue, COUNT(*) as count
+FROM EPIC.ENCOUNTERS e
+LEFT JOIN EPIC.PATIENTS p ON e.patient_id = p.patient_id
+WHERE p.patient_id IS NULL
+
+UNION ALL
+
+-- Check for financial records without encounters  
+SELECT 'Financial records without encounters', COUNT(*)
+FROM ORACLE_ERP.ENCOUNTER_FINANCIALS f
+LEFT JOIN EPIC.ENCOUNTERS e ON f.encounter_id = e.encounter_id
+WHERE e.encounter_id IS NULL
+
+UNION ALL
+
+-- Check for engagement records without patients
+SELECT 'Engagement records without patients', COUNT(*)
+FROM SALESFORCE.PATIENT_PORTAL_ACTIVITY s
+LEFT JOIN EPIC.PATIENTS p ON s.patient_id = p.patient_id
+WHERE p.patient_id IS NULL;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+## Error Patterns and Solutions
+
+### Common Deployment Errors
+
+#### Dynamic Table Dependency Issues
+```bash
+# Check Dynamic Table dependencies
+snow sql -q "
+SELECT 
+    table_name,
+    created_on,
+    last_altered,
+    comment
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE table_type = 'DYNAMIC TABLE' 
+AND table_schema = 'CONFORMED'
+ORDER BY created_on;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+#### Stage and File Loading Issues
+```bash
+# Check stage contents
+snow sql -q "LIST @TCH_PATIENT_360_POC.RAW_DATA.PATIENT_DATA_STAGE;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+
+# Check unstructured data stage
+snow sql -q "LIST @TCH_PATIENT_360_POC.RAW_DATA.UNSTRUCTURED_DATA_STAGE;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+### Interactive Debugging Session Example
+```bash
+# Start interactive debugging session
+export SNOWFLAKE_PASSWORD=your_password
+
+# Quick connection test
+snow sql -q "SELECT CURRENT_USER(), CURRENT_ROLE(), CURRENT_DATABASE();" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+
+# Check specific patient data integration
+snow sql -q "
+SELECT 
+    pm.patient_id,
+    pm.full_name,
+    pm.current_age,
+    ff.total_charges,
+    ef.engagement_score
+FROM CONFORMED.PATIENT_MASTER pm
+LEFT JOIN CONFORMED.FINANCIAL_FACT ff ON pm.patient_key = ff.patient_key
+LEFT JOIN CONFORMED.ENGAGEMENT_FACT ef ON pm.patient_key = ef.patient_key
+WHERE pm.patient_id = 'TCH-000001'
+AND pm.is_current = TRUE;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_ANALYTICS_WH
+```
+
+## Reference Files
+- Deployment scripts: [deploy/deploy_tch_poc.sh](mdc:deploy/deploy_tch_poc.sh)
+- Architecture standards: [.cursor/rules/tch-architecture.mdc](mdc:.cursor/rules/tch-architecture.mdc)
+- SQL standards: [.cursor/rules/sql-standards.mdc](mdc:.cursor/rules/sql-standards.mdc)

@@ -1,0 +1,592 @@
+---
+alwaysApply: true
+---
+# Texas Children's Hospital Patient 360 PoC - Cursor Rules
+
+## Project Standards and Guidelines
+
+### General Principles
+1. **Healthcare Focus**: All code should be written with healthcare data sensitivities in mind
+2. **Enterprise Quality**: Code should be production-ready, well-documented, and maintainable
+3. **Snowflake Best Practices**: Follow Snowflake conventions and optimization patterns
+4. **Security First**: Always consider data security and privacy implications
+5. **Performance Optimized**: Write efficient SQL and Python code for large datasets
+
+## SQL Coding Standards
+
+### Naming Conventions
+```sql
+-- Table Names: Use descriptive, uppercase names with underscores
+PATIENT_DEMOGRAPHICS
+ENCOUNTER_SUMMARY
+LAB_RESULTS_FACT
+
+-- Column Names: Use descriptive, lowercase names with underscores
+patient_id
+encounter_date
+lab_result_value
+
+-- Schema Names: Use lowercase with underscores
+raw_data
+conformed
+presentation
+ai_ml
+```
+
+### SQL Style Guidelines
+```sql
+-- Use consistent formatting
+SELECT 
+    patient_id,
+    first_name,
+    last_name,
+    date_of_birth,
+    DATEDIFF('year', date_of_birth, CURRENT_DATE()) AS age
+FROM conformed.patient_master
+WHERE age BETWEEN 0 AND 21
+ORDER BY last_name, first_name;
+
+-- Always use explicit JOIN syntax
+SELECT 
+    p.patient_id,
+    p.first_name,
+    e.encounter_date,
+    e.department
+FROM conformed.patient_master p
+    INNER JOIN conformed.encounters e 
+        ON p.patient_id = e.patient_id
+WHERE e.encounter_date >= DATEADD('month', -12, CURRENT_DATE());
+
+-- Use meaningful aliases
+-- Good: p for patients, e for encounters
+-- Bad: a, b, c, t1, t2
+```
+
+### Dynamic Tables Best Practices
+```sql
+-- Always specify TARGET_LAG appropriately
+-- Design tables such that they can be refreshed incrementally. Avoid non deterministic functions like current_date, current_timestamp, etc
+CREATE OR REPLACE DYNAMIC TABLE conformed.patient_summary
+TARGET_LAG = '15 minutes'  -- Consider business requirements
+WAREHOUSE = compute_wh
+AS
+SELECT 
+    patient_id,
+    COUNT(*) AS total_encounters,
+    MAX(encounter_date) AS last_encounter_date,
+    AVG(length_of_stay) AS avg_length_of_stay
+FROM raw_data.epic.encounters
+GROUP BY patient_id;
+
+-- Include comments explaining business logic
+-- Use appropriate refresh frequencies based on data velocity
+-- Consider dependencies between dynamic tables
+```
+
+## Python Coding Standards
+
+### General Python Guidelines
+```python
+# Use type hints for better code documentation
+from typing import Dict, List, Optional, Tuple
+import pandas as pd
+import snowflake.connector
+
+def get_patient_data(patient_id: str, connection: snowflake.connector.SnowflakeConnection) -> Optional[Dict]:
+    """
+    Retrieve comprehensive patient data from Snowflake.
+    
+    Args:
+        patient_id: Unique patient identifier
+        connection: Active Snowflake connection
+        
+    Returns:
+        Dictionary containing patient data or None if not found
+    """
+    query = """
+    SELECT 
+        patient_id,
+        first_name,
+        last_name,
+        date_of_birth,
+        gender
+    FROM presentation.patient_360
+    WHERE patient_id = %s
+    """
+    
+    try:
+        cursor = connection.cursor()
+        cursor.execute(query, (patient_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            return {
+                'patient_id': result[0],
+                'first_name': result[1],
+                'last_name': result[2],
+                'date_of_birth': result[3],
+                'gender': result[4]
+            }
+        return None
+        
+    except Exception as e:
+        logging.error(f"Error retrieving patient data: {e}")
+        return None
+    finally:
+        cursor.close()
+```
+
+### Streamlit Application Standards
+```python
+import streamlit as st
+import pandas as pd
+from utils.snowflake_conn import get_snowflake_connection
+from utils.cortex_utils import query_cortex_analyst
+
+# Use consistent page configuration
+st.set_page_config(
+    page_title="TCH Patient 360",
+    page_icon="🏥",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Use session state for data persistence
+if 'patient_data' not in st.session_state:
+    st.session_state.patient_data = None
+
+# Implement proper error handling
+try:
+    connection = get_snowflake_connection()
+    patient_data = get_patient_data(patient_id, connection)
+    
+    if patient_data:
+        display_patient_dashboard(patient_data)
+    else:
+        st.error("Patient not found")
+        
+except Exception as e:
+    st.error(f"Application error: {e}")
+    logging.error(f"Streamlit error: {e}")
+```
+
+### Data Generation Standards
+```python
+import random
+import faker
+from datetime import datetime, timedelta
+from typing import List, Dict
+
+class PediatricDataGenerator:
+    """Generate realistic pediatric healthcare data for PoC demonstration."""
+    
+    def __init__(self, seed: int = 42):
+        """Initialize with consistent seed for reproducible data."""
+        random.seed(seed)
+        self.fake = faker.Faker()
+        faker.Faker.seed(seed)
+        
+    def generate_patient_demographics(self, count: int) -> List[Dict]:
+        """
+        Generate realistic pediatric patient demographics.
+        
+        Args:
+            count: Number of patients to generate
+            
+        Returns:
+            List of patient demographic dictionaries
+        """
+        patients = []
+        
+        for i in range(count):
+            # Generate age-appropriate data
+            age = self._generate_pediatric_age()
+            birth_date = datetime.now() - timedelta(days=age * 365.25)
+            
+            patient = {
+                'patient_id': f"TCH-{i+1:06d}",
+                'mrn': f"MRN{i+1:08d}",
+                'first_name': self.fake.first_name(),
+                'last_name': self.fake.last_name(),
+                'date_of_birth': birth_date.date(),
+                'gender': random.choice(['M', 'F']),
+                'race': self._generate_race(),
+                'ethnicity': self._generate_ethnicity(),
+                'zip_code': self._generate_houston_zip(),
+                'insurance_type': self._generate_insurance_type()
+            }
+            patients.append(patient)
+            
+        return patients
+    
+    def _generate_pediatric_age(self) -> int:
+        """Generate age following pediatric population distribution."""
+        # Higher concentration in younger ages (0-5)
+        weights = [25, 20, 15, 10, 10, 8, 6, 4, 2] + [1] * 13  # 0-21 years
+        return random.choices(range(22), weights=weights)[0]
+```
+
+## File Organization Standards
+
+### Directory Structure
+```
+project_root/
+├── sql/                    # All SQL scripts
+│   ├── setup/             # Database setup scripts
+│   ├── dynamic_tables/    # Dynamic table definitions
+│   ├── data_load/         # Data loading scripts
+│   └── cortex/            # AI/ML setup scripts
+├── python/                # Python utilities and applications
+│   ├── data_generation/   # Mock data generation
+│   ├── streamlit_app/     # Streamlit application
+│   └── utils/             # Shared utilities
+├── deploy/                # Deployment scripts
+├── docs/                  # Documentation
+├── config/                # Configuration files
+└── tests/                 # Test files
+```
+
+### File Naming Conventions
+```
+# SQL Files
+01_database_setup.sql
+02_schema_creation.sql
+03_table_definitions.sql
+04_dynamic_tables.sql
+05_data_loading.sql
+
+# Python Files
+patient_data_generator.py
+encounter_simulator.py
+clinical_notes_generator.py
+snowflake_connection.py
+cortex_analytics.py
+```
+
+## Documentation Standards
+
+### Code Comments
+```sql
+-- Create patient master dynamic table for real-time patient data
+-- Updates every 5 minutes to reflect latest Epic data
+-- Includes calculated fields for age and risk stratification
+CREATE OR REPLACE DYNAMIC TABLE conformed.patient_master
+TARGET_LAG = '5 minutes'
+WAREHOUSE = compute_wh
+AS
+SELECT 
+    patient_id,
+    -- Calculate current age for pediatric care protocols
+    DATEDIFF('year', date_of_birth, CURRENT_DATE()) AS current_age,
+    -- Flag high-risk patients based on chronic conditions
+    CASE 
+        WHEN chronic_conditions > 2 THEN 'HIGH_RISK'
+        WHEN chronic_conditions = 1 THEN 'MODERATE_RISK'
+        ELSE 'LOW_RISK'
+    END AS risk_category
+FROM raw_data.epic.patients;
+```
+
+### Function Documentation
+```python
+def generate_realistic_lab_values(patient_age: int, test_name: str) -> Dict:
+    """
+    Generate age-appropriate laboratory values for pediatric patients.
+    
+    This function ensures that generated lab values fall within realistic
+    reference ranges for the patient's age group, supporting accurate
+    clinical decision-making scenarios in the PoC.
+    
+    Args:
+        patient_age: Patient age in years (0-21)
+        test_name: Laboratory test identifier (e.g., 'CBC', 'BMP')
+        
+    Returns:
+        Dictionary containing test results with appropriate reference ranges
+        
+    Raises:
+        ValueError: If patient_age is outside pediatric range
+        KeyError: If test_name is not supported
+        
+    Example:
+        >>> generate_realistic_lab_values(5, 'CBC')
+        {
+            'hemoglobin': 12.5,
+            'hematocrit': 37.8,
+            'white_blood_cells': 8200,
+            'reference_range': 'Normal for age 5'
+        }
+    """
+```
+
+## Security Guidelines
+
+### Data Handling
+```python
+# Never log sensitive data
+logging.info(f"Processing patient with ID: {patient_id[:3]}***")  # Mask IDs
+
+# Use parameterized queries to prevent SQL injection
+query = "SELECT * FROM patients WHERE patient_id = %s"
+cursor.execute(query, (patient_id,))
+
+# Implement proper access controls
+def check_user_permissions(user_id: str, resource: str) -> bool:
+    """Verify user has appropriate permissions for resource access."""
+    # Implementation here
+    pass
+
+@require_permission('patient_data_read')
+def get_patient_details(patient_id: str):
+    """Function that requires specific permissions."""
+    pass
+```
+
+### Environment Configuration
+```python
+import os
+from typing import Optional
+
+def get_snowflake_config() -> Dict[str, str]:
+    """Retrieve Snowflake configuration from environment variables."""
+    required_vars = ['SNOWFLAKE_ACCOUNT', 'SNOWFLAKE_USER', 'SNOWFLAKE_DATABASE']
+    
+    config = {}
+    for var in required_vars:
+        value = os.getenv(var)
+        if not value:
+            raise ValueError(f"Required environment variable {var} not set")
+        config[var.lower().replace('snowflake_', '')] = value
+    
+    # Optional authentication method
+    if os.getenv('SNOWFLAKE_PRIVATE_KEY_PATH'):
+        config['private_key_path'] = os.getenv('SNOWFLAKE_PRIVATE_KEY_PATH')
+    elif os.getenv('SNOWFLAKE_PASSWORD'):
+        config['password'] = os.getenv('SNOWFLAKE_PASSWORD')
+    else:
+        raise ValueError("Either SNOWFLAKE_PASSWORD or SNOWFLAKE_PRIVATE_KEY_PATH must be set")
+    
+    return config
+```
+
+## Testing Standards
+
+### SQL Testing
+```sql
+-- Test data quality and constraints
+SELECT 
+    COUNT(*) AS total_patients,
+    COUNT(DISTINCT patient_id) AS unique_patients,
+    COUNT(*) - COUNT(DISTINCT patient_id) AS duplicates
+FROM conformed.patient_master;
+
+-- Validate age calculations
+SELECT 
+    patient_id,
+    date_of_birth,
+    current_age,
+    DATEDIFF('year', date_of_birth, CURRENT_DATE()) AS calculated_age
+FROM conformed.patient_master
+WHERE current_age != DATEDIFF('year', date_of_birth, CURRENT_DATE())
+LIMIT 10;
+```
+
+### Python Testing
+```python
+import pytest
+from data_generation.patient_generator import PediatricDataGenerator
+
+class TestPediatricDataGenerator:
+    """Test suite for pediatric data generation."""
+    
+    def setup_method(self):
+        """Setup test environment."""
+        self.generator = PediatricDataGenerator(seed=42)
+    
+    def test_patient_age_distribution(self):
+        """Test that generated ages follow pediatric distribution."""
+        patients = self.generator.generate_patient_demographics(1000)
+        ages = [self.generator._calculate_age(p['date_of_birth']) for p in patients]
+        
+        # Verify all ages are within pediatric range
+        assert all(0 <= age <= 21 for age in ages)
+        
+        # Verify higher concentration in younger ages
+        young_patients = sum(1 for age in ages if age <= 5)
+        assert young_patients > len(patients) * 0.4  # At least 40% under 6
+    
+    def test_realistic_conditions_prevalence(self):
+        """Test that condition prevalence matches real-world data."""
+        patients = self.generator.generate_patient_demographics(10000)
+        conditions = self.generator.assign_conditions(patients)
+        
+        asthma_rate = sum(1 for c in conditions if 'asthma' in c) / len(patients)
+        assert 0.07 <= asthma_rate <= 0.12  # 7-12% asthma prevalence
+```
+
+## Performance Guidelines
+
+### Query Optimization
+```sql
+-- Use appropriate clustering keys
+ALTER TABLE conformed.encounters 
+CLUSTER BY (patient_id, encounter_date);
+
+-- Leverage result caching
+-- Avoid SELECT * in production queries
+-- Use LIMIT for exploratory queries
+-- Consider materialized views for complex aggregations
+
+-- Example of optimized query structure
+WITH patient_encounters AS (
+    SELECT 
+        patient_id,
+        encounter_date,
+        department,
+        ROW_NUMBER() OVER (PARTITION BY patient_id ORDER BY encounter_date DESC) as rn
+    FROM conformed.encounters
+    WHERE encounter_date >= DATEADD('year', -1, CURRENT_DATE())
+),
+recent_encounters AS (
+    SELECT *
+    FROM patient_encounters
+    WHERE rn <= 5  -- Last 5 encounters per patient
+)
+SELECT 
+    p.patient_id,
+    p.first_name,
+    p.last_name,
+    re.encounter_date,
+    re.department
+FROM conformed.patient_master p
+    INNER JOIN recent_encounters re ON p.patient_id = re.patient_id
+ORDER BY p.last_name, p.first_name, re.encounter_date DESC;
+```
+
+### Streamlit Performance
+```python
+# Use caching for expensive operations
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def load_patient_summary(patient_id: str) -> pd.DataFrame:
+    """Load and cache patient summary data."""
+    query = """
+    SELECT encounter_date, department, diagnosis, length_of_stay
+    FROM presentation.patient_encounters
+    WHERE patient_id = %s
+    ORDER BY encounter_date DESC
+    LIMIT 50
+    """
+    return pd.read_sql(query, connection, params=[patient_id])
+
+# Use session state to avoid re-computation
+if 'search_results' not in st.session_state:
+    st.session_state.search_results = None
+
+# Implement pagination for large datasets
+def paginate_results(data: pd.DataFrame, page_size: int = 25) -> pd.DataFrame:
+    """Implement pagination for large result sets."""
+    total_pages = len(data) // page_size + (1 if len(data) % page_size > 0 else 0)
+    
+    if total_pages > 1:
+        page = st.selectbox("Page", range(1, total_pages + 1))
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        return data.iloc[start_idx:end_idx]
+    
+    return data
+```
+
+## Error Handling Standards
+
+### Comprehensive Error Handling
+```python
+import logging
+from contextlib import contextmanager
+
+# Configure logging for healthcare data
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('tch_patient_360.log'),
+        logging.StreamHandler()
+    ]
+)
+
+@contextmanager
+def snowflake_connection():
+    """Context manager for Snowflake connections with proper cleanup."""
+    conn = None
+    try:
+        conn = snowflake.connector.connect(**get_snowflake_config())
+        yield conn
+    except snowflake.connector.errors.Error as e:
+        logging.error(f"Snowflake connection error: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def safe_execute_query(query: str, params: tuple = None) -> Optional[List]:
+    """Execute query with comprehensive error handling."""
+    try:
+        with snowflake_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params or ())
+            return cursor.fetchall()
+            
+    except snowflake.connector.errors.ProgrammingError as e:
+        logging.error(f"SQL execution error: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected query error: {e}")
+        return None
+```
+
+## Before making code changes
+- [ ] Reference the design.md and requirements.md documents and make sure the changes you're about to make conform to the design and requirements.
+- [ ] Do not add placeholder values or text. Don't place anything in the app that says "If you enabled (some feature) this is what you would see". Instead make that portion of the app work according to the design requirements.
+- [ ] All aspects of the app should query the live data that was generated for the PoC. No hard coding of fake values or dummy data in the app. 
+- [ ] No hard coding things like search terms into SQL queries. Anything that is meant to be user specified, like a search query, should never be hard coded into any code. You can provide helpful examples in the UI, but nothing should be hard coded into any code or query you write.
+
+## Code Review Checklist
+
+### Before Committing
+- [ ] All functions have proper type hints and docstrings
+- [ ] SQL follows naming conventions and formatting standards
+- [ ] No hardcoded credentials or sensitive information
+- [ ] Error handling is comprehensive and appropriate
+- [ ] Code is tested with realistic data volumes
+- [ ] Performance implications have been considered
+- [ ] Security best practices are followed
+- [ ] Documentation is updated where necessary
+- [ ] Any changes to any code should be tested be re-executing the deployment script. If any code changes require makign changes to the deployment script explain those changes and ask for permission to update the script accordingly.
+- [ ] If you do make changes to the deployment script: Make sure you think about how those changes will affect any downstream steps and act accordingly.
+- [ ] Any linter errors should be addressed before deploying new code.
+
+
+### Healthcare-Specific Checks
+- [ ] Patient data is properly de-identified in mock data
+- [ ] Age calculations are appropriate for pediatric population
+- [ ] Clinical data follows realistic patterns and distributions
+- [ ] Medical terminology and codes are accurate
+- [ ] Compliance considerations are addressed
+
+### Deployment Scripts Consistency
+- [ ] **CRITICAL**: If `deploy/deploy_tch_poc.sh` (bash) is modified, `deploy/deploy_tch_poc.ps1` (PowerShell) must be updated with equivalent changes
+- [ ] **CRITICAL**: If `deploy/deploy_tch_poc.ps1` (PowerShell) is modified, `deploy/deploy_tch_poc.sh` (bash) must be updated with equivalent changes
+- [ ] Both scripts must maintain feature parity across platforms (Linux/macOS/Windows)
+- [ ] Command-line arguments and options must be consistent between both scripts
+- [ ] Error messages and logging output should be equivalent
+- [ ] Help documentation should match between bash and PowerShell versions
+- [ ] Both scripts should produce identical deployment results
+- [ ] Any new deployment features must be implemented in both versions
+- [ ] Testing should be performed on both script versions when changes are made
+
+
+**Rationale**: The PoC includes both bash and PowerShell deployment scripts to ensure cross-platform compatibility. Maintaining consistency between these scripts is essential for providing a reliable deployment experience regardless of the user's operating system.
+
+These standards ensure that the Texas Children's Hospital Patient 360 PoC maintains enterprise-grade quality while demonstrating Snowflake's capabilities effectively.

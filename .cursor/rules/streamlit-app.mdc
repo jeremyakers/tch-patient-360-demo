@@ -1,0 +1,230 @@
+---
+globs: python/streamlit_app/**/*.py
+---
+
+# TCH Patient 360 PoC - Streamlit Application Standards
+
+## Application Architecture Requirements
+
+### Page Module Structure
+The Streamlit app MUST follow this exact structure:
+```
+streamlit_app/
+├── main.py                    # Main dashboard entry point
+├── page_modules/
+│   ├── patient_search.py      # Patient lookup functionality
+│   ├── patient_360.py         # Comprehensive patient view
+│   ├── population_health.py   # Population analytics
+│   ├── cohort_builder.py      # Cohort analysis tools
+│   └── chat_interface.py      # AI chat with Cortex Agents
+├── services/
+│   ├── session_manager.py     # Snowflake session management
+│   ├── data_service.py        # Core data access layer
+│   ├── cortex_analyst.py      # Structured data queries
+│   ├── cortex_search.py       # Unstructured document search
+│   └── cortex_agents.py       # Intelligent query routing
+├── components/
+│   ├── patient_cards.py       # Reusable patient UI components
+│   ├── clinical_timeline.py   # Clinical history visualization
+│   ├── analytics_widgets.py   # Analytics dashboard widgets
+│   └── search_widgets.py      # Search interface components
+└── utils/
+    ├── snowflake_connection.py # Database connection utilities
+    ├── cortex_utils.py         # AI/ML service utilities
+    ├── helpers.py              # General helper functions
+    ├── validators.py           # Input validation
+    └── config.py               # Configuration management
+```
+
+## Multi-Source Data Integration Requirements
+
+**TCH VALUE PROPOSITION**: Multi-source analytics is THE PRIMARY VALUE for TCH. Current SQL Server environment requires complex ETL for joining 70+ sources. EVERY view must showcase Snowflake's ease of multi-source integration.
+
+### Financial Analytics Integration
+All patient views MUST include Oracle ERP financial data where applicable:
+
+```python
+def get_patient_financial_summary(patient_id: str) -> Dict:
+    """Get patient financial summary from Oracle ERP integration."""
+    query = """
+    SELECT 
+        COUNT(DISTINCT ff.encounter_id) as total_encounters_with_charges,
+        SUM(ff.total_charges) as lifetime_charges,
+        SUM(ff.insurance_payments) as total_insurance_payments,
+        SUM(ff.patient_payments) as total_patient_payments,
+        SUM(ff.balance) as outstanding_balance,
+        AVG(ff.cost_per_day) as avg_cost_per_day,
+        ff.financial_class,
+        COUNT(DISTINCT ff.payer_name) as unique_payers
+    FROM CONFORMED.FINANCIAL_FACT ff
+    INNER JOIN CONFORMED.PATIENT_MASTER pm ON ff.patient_key = pm.patient_key
+    WHERE pm.patient_id = %s AND pm.is_current = TRUE
+    GROUP BY ff.financial_class
+    """
+    # Implementation must query live data, no hardcoded values
+```
+
+### Patient Engagement Integration
+All patient views MUST include Salesforce engagement data:
+
+```python
+def get_patient_engagement_metrics(patient_id: str) -> Dict:
+    """Get patient engagement metrics from Salesforce integration."""
+    query = """
+    SELECT 
+        ef.portal_logins_last_30_days,
+        ef.digital_health_adoption_level,
+        COUNT(DISTINCT ef.activity_type) as activity_types_count,
+        MAX(ef.activity_date) as last_activity_date,
+        AVG(CASE WHEN ef.activity_type = 'Portal Login' THEN 1 ELSE 0 END) as portal_usage_frequency
+    FROM CONFORMED.ENGAGEMENT_FACT ef
+    INNER JOIN CONFORMED.PATIENT_MASTER pm ON ef.patient_key = pm.patient_key
+    WHERE pm.patient_id = %s AND pm.is_current = TRUE
+    """
+    # Implementation must query live data, no hardcoded values
+```
+
+## Dashboard Component Requirements
+
+### Patient 360 View Components
+The patient 360 view MUST integrate data from all four source systems:
+
+1. **Clinical Summary** (Epic data)
+   - Demographics, encounters, diagnoses
+   - Lab results, medications, vital signs
+   - Risk stratification and chronic conditions
+
+2. **Financial Summary** (Oracle ERP data)
+   - Total charges and payments by encounter
+   - Outstanding balances and payer information
+   - Cost trends and high-cost episode identification
+
+3. **Provider Context** (Workday data)
+   - Attending physicians and specialties
+   - Department utilization patterns
+   - Care team composition
+
+4. **Engagement Metrics** (Salesforce data)
+   - Digital health adoption scores
+   - Portal usage and communication patterns
+   - Family engagement for pediatric care
+
+### Population Health Analytics
+Population health views MUST demonstrate multi-source correlation:
+
+```python
+def get_cost_effectiveness_by_condition(condition_filter: str = None) -> pd.DataFrame:
+    """Analyze cost-effectiveness across clinical and financial data."""
+    query = """
+    SELECT 
+        df.diagnosis_description,
+        COUNT(DISTINCT pm.patient_id) as patient_count,
+        AVG(ff.total_charges) as avg_cost_per_patient,
+        AVG(es.length_of_stay) as avg_length_of_stay,
+        AVG(ef.engagement_score) as avg_engagement_score,
+        SUM(ff.total_charges) / COUNT(DISTINCT es.encounter_id) as cost_per_encounter,
+        pm.risk_category
+    FROM CONFORMED.DIAGNOSIS_FACT df
+    INNER JOIN CONFORMED.PATIENT_MASTER pm ON df.patient_key = pm.patient_key
+    INNER JOIN CONFORMED.ENCOUNTER_SUMMARY es ON df.encounter_key = es.encounter_key
+    LEFT JOIN CONFORMED.FINANCIAL_FACT ff ON es.encounter_key = ff.encounter_key
+    LEFT JOIN CONFORMED.ENGAGEMENT_FACT ef ON pm.patient_key = ef.patient_key
+    WHERE pm.is_current = TRUE
+    AND (%s IS NULL OR df.diagnosis_description ILIKE %s)
+    GROUP BY df.diagnosis_description, pm.risk_category
+    ORDER BY avg_cost_per_patient DESC
+    """
+    # User-specified condition filter, never hardcoded
+```
+
+## Cortex Integration Requirements
+
+### Chat Interface Standards
+**TCH VALUE PROPOSITION**: Built-in AI/ML capabilities are a MAJOR ADVANTAGE over SQL Server. ALWAYS prioritize Cortex functions to showcase capabilities not available in their current environment.
+
+The chat interface MUST integrate Cortex Agents with intelligent routing:
+
+```python
+def process_natural_language_query(user_query: str) -> Dict:
+    """Process user query through Cortex Agents with intelligent routing."""
+    # Route to Cortex Analyst for structured data questions
+    # Route to Cortex Search for unstructured document questions
+    # Combine results when multi-modal response needed
+    
+    # SHOWCASE: Use AI functions over traditional methods when possible
+    # Example: EXTRACT_ANSWER instead of regex for document parsing
+    # Example: SENTIMENT instead of keyword matching for feedback analysis
+    
+    # NEVER hardcode query examples in the backend
+    # User query must be passed through as-is
+```
+
+### AI/ML Function Priority
+**PREFER** Snowflake AI functions over traditional approaches:
+```python
+# Instead of regex, use EXTRACT_ANSWER to showcase AI capability
+def extract_clinical_info(note_text: str, question: str) -> str:
+    query = f"""
+    SELECT SNOWFLAKE.CORTEX.EXTRACT_ANSWER('{note_text}', '{question}') as extracted_info
+    """
+    # This showcases capabilities not available in SQL Server
+
+# Use SENTIMENT for patient feedback analysis
+def analyze_patient_satisfaction(feedback: str) -> str:
+    query = f"""
+    SELECT SNOWFLAKE.CORTEX.SENTIMENT('{feedback}') as sentiment_score
+    """
+    # Demonstrates built-in AI vs custom development
+```
+
+### Data Service Layer
+All data access MUST go through the data service layer:
+
+```python
+@st.cache_data(ttl=300)
+def get_multi_source_patient_data(patient_id: str) -> Dict:
+    """Get comprehensive patient data from all source systems."""
+    # Combine Epic clinical data
+    # Include Workday provider context  
+    # Add Oracle ERP financial data
+    # Include Salesforce engagement metrics
+    # Return unified patient view
+```
+
+## Performance Requirements
+
+### Caching Strategy
+```python
+# Cache expensive multi-source queries
+@st.cache_data(ttl=300)  # 5 minute cache
+def load_population_metrics() -> pd.DataFrame:
+    """Load population health metrics across all data sources."""
+    
+# Use session state for user interactions
+if 'selected_patient' not in st.session_state:
+    st.session_state.selected_patient = None
+```
+
+### Query Optimization
+- Use appropriate warehouse (TCH_ANALYTICS_WH) for interactive queries
+- Leverage Dynamic Table caching for real-time data
+- Implement pagination for large result sets
+- Use LIMIT clauses for exploratory queries
+
+## User Experience Requirements
+
+### No Placeholder Content
+- NEVER display "If you enabled X feature, this is what you would see"
+- ALL features must work with live generated data
+- Provide helpful examples in UI hints, but never hardcode search terms or filters in backend code
+
+### Multi-Source Value Demonstration
+Every major view should clearly demonstrate the value of integrating multiple data sources:
+- Clinical outcomes correlation with financial efficiency
+- Provider performance correlation with patient engagement
+- Cost trends correlation with care quality metrics
+
+## Reference Files
+- Main application entry point: [python/streamlit_app/main.py](mdc:python/streamlit_app/main.py)
+- Data service layer: [python/streamlit_app/services/data_service.py](mdc:python/streamlit_app/services/data_service.py)
+- Architecture standards: [.cursor/rules/tch-architecture.mdc](mdc:.cursor/rules/tch-architecture.mdc)

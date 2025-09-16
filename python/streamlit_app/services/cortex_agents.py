@@ -357,7 +357,9 @@ Always provide context about the data timeframe and any limitations of your anal
             # Model specification
             "models": {
                 "orchestration": self.model
-            }
+            },
+            # Enable streaming for SSE
+            "stream": True
         }
         
         # Only include thread_id if it's not None (v2 API requirement)

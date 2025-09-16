@@ -1,0 +1,237 @@
+---
+globs: python/data_generation/**/*.py
+---
+
+# TCH Patient 360 PoC - Data Generation Standards
+
+## Multi-Source Data Generation Requirements
+
+**TCH VALUE PROPOSITION**: Multi-source data integration is THE PRIMARY VALUE for TCH. Generate realistic, correlated data across Epic, Workday, Oracle ERP, and Salesforce to showcase Snowflake's ease of joining data from multiple sources - a major pain point in their current SQL Server environment.
+
+### Oracle ERP Financial Data Generation
+
+#### Financial Data Patterns
+Generate realistic financial data that correlates with clinical complexity:
+
+```python
+def generate_encounter_financials(encounters: List[Dict], patients: List[Dict]) -> List[Dict]:
+    """Generate realistic financial data for Oracle ERP integration."""
+    
+    # Department-based cost modeling
+    department_cost_multipliers = {
+        'Pediatric ICU': 3.5,
+        'NICU': 4.0,
+        'Emergency Department': 1.8,
+        'Cardiology': 2.2,
+        'Neurology': 2.0,
+        'Oncology': 3.0,
+        'General Pediatrics': 1.0,
+        'Ambulatory Surgery': 1.5
+    }
+    
+    # Age-based cost adjustments (neonates and complex cases cost more)
+    def get_age_cost_multiplier(age: int) -> float:
+        if age == 0:  # Newborns
+            return 2.5
+        elif age <= 1:  # Infants
+            return 1.8
+        elif age <= 5:  # Young children
+            return 1.2
+        else:  # Older children
+            return 1.0
+    
+    # Insurance payer patterns (realistic for pediatric population)
+    def get_payer_info(insurance_type: str) -> Tuple[str, float, float]:
+        payer_patterns = {
+            'Medicaid': ('TX Medicaid', 0.85, 0.15),  # Lower reimbursement
+            'Commercial': ('Aetna Better Health', 0.92, 0.08),
+            'CHIP': ('TX CHIP', 0.88, 0.12),
+            'Self-pay': ('Self Pay', 0.60, 0.40)
+        }
+        return payer_patterns.get(insurance_type, ('Unknown', 0.80, 0.20))
+```
+
+#### Financial Metrics Generation
+```python
+def calculate_realistic_charges(encounter: Dict, patient: Dict) -> Dict:
+    """Calculate realistic charges based on encounter complexity."""
+    
+    base_charge = 1500  # Base pediatric encounter charge
+    
+    # Adjust for department complexity
+    dept_multiplier = department_cost_multipliers.get(encounter['department'], 1.0)
+    
+    # Adjust for age complexity
+    age_multiplier = get_age_cost_multiplier(patient['age'])
+    
+    # Adjust for length of stay
+    los_multiplier = max(1.0, encounter.get('length_of_stay', 1) * 0.3)
+    
+    # Calculate total charges
+    total_charges = base_charge * dept_multiplier * age_multiplier * los_multiplier
+    
+    # Add realistic variance
+    variance = random.uniform(0.8, 1.4)
+    total_charges *= variance
+    
+    return {
+        'financial_id': f"FIN-{random.randint(100000, 999999)}",
+        'encounter_id': encounter['encounter_id'],
+        'patient_id': encounter['patient_id'],
+        'total_charges': round(total_charges, 2),
+        'insurance_payments': round(total_charges * payer_reimbursement_rate, 2),
+        'patient_payments': round(total_charges * patient_responsibility_rate, 2),
+        'adjustments': round(total_charges * random.uniform(0.02, 0.08), 2),
+        'balance': round(total_charges * random.uniform(0.05, 0.15), 2),
+        'payer_name': payer_name,
+        'financial_class': get_financial_class(insurance_type)
+    }
+```
+
+### Salesforce Patient Engagement Data Generation
+
+#### Engagement Patterns by Age Group
+```python
+def generate_patient_portal_activity(patients: List[Dict]) -> List[Dict]:
+    """Generate realistic patient engagement data for Salesforce integration."""
+    
+    # Age-based engagement patterns (parents vs adolescents)
+    def get_engagement_pattern(age: int) -> Dict:
+        if age <= 12:  # Parent/guardian managed
+            return {
+                'login_frequency': 'moderate',  # Parents check periodically
+                'message_frequency': 'high',    # Parents ask questions
+                'appointment_adherence': 0.92,  # Parents schedule reliably
+                'portal_features_used': ['appointments', 'messages', 'results']
+            }
+        elif age <= 17:  # Transitional care
+            return {
+                'login_frequency': 'low',       # Teens less engaged
+                'message_frequency': 'low',     # Less communication
+                'appointment_adherence': 0.78,  # More missed appointments
+                'portal_features_used': ['appointments', 'results']
+            }
+        else:  # Young adult
+            return {
+                'login_frequency': 'high',      # Self-managed care
+                'message_frequency': 'moderate',
+                'appointment_adherence': 0.85,
+                'portal_features_used': ['appointments', 'messages', 'results', 'billing']
+            }
+```
+
+#### Digital Health Adoption Scoring
+```python
+def calculate_engagement_score(activities: List[Dict], patient_age: int) -> int:
+    """Calculate digital health adoption score (0-100)."""
+    
+    base_score = 50
+    
+    # Portal login frequency (last 30 days)
+    login_count = len([a for a in activities if a['activity_type'] == 'Portal Login'])
+    login_score = min(30, login_count * 3)  # Max 30 points
+    
+    # Message engagement
+    message_count = len([a for a in activities if a['activity_type'] == 'Message'])
+    message_score = min(20, message_count * 2)  # Max 20 points
+    
+    # Feature utilization diversity
+    unique_features = len(set(a['activity_type'] for a in activities))
+    feature_score = min(20, unique_features * 5)  # Max 20 points
+    
+    # Age-appropriate adjustments
+    age_adjustment = get_age_engagement_adjustment(patient_age)
+    
+    total_score = min(100, base_score + login_score + message_score + feature_score + age_adjustment)
+    return total_score
+```
+
+### Correlation Requirements
+
+#### Clinical-Financial Correlation
+```python
+def ensure_clinical_financial_correlation(encounters: List[Dict], diagnoses: List[Dict], financials: List[Dict]):
+    """Ensure financial data correlates realistically with clinical complexity."""
+    
+    # High-cost conditions should generate higher charges
+    high_cost_conditions = ['E10.9', 'G40.909', 'Q21.0']  # Diabetes, Epilepsy, Heart defects
+    
+    # Chronic conditions should show repeated encounters with consistent costs
+    chronic_conditions = ['J45.9', 'F90.9', 'E66.9']  # Asthma, ADHD, Obesity
+    
+    # Emergency encounters should have higher cost variance
+    # Planned procedures should have more predictable costs
+```
+
+#### Engagement-Outcome Correlation
+```python
+def ensure_engagement_outcome_correlation(patients: List[Dict], engagements: List[Dict], encounters: List[Dict]):
+    """Ensure engagement data correlates with clinical outcomes."""
+    
+    # Higher engagement should correlate with:
+    # - Better appointment adherence
+    # - Earlier detection of issues
+    # - Reduced emergency department visits
+    # - Better medication compliance (chronic conditions)
+    
+    # Family engagement patterns for pediatric care:
+    # - Complex patients should have higher parent engagement
+    # - Adolescents should show transition to self-management
+    # - Chronic condition families should have higher portal usage
+```
+
+## Data Volume Scaling
+
+### Scalable Generation Patterns
+```python
+def generate_scalable_dataset(size: str, base_patients: int) -> Dict[str, int]:
+    """Generate dataset that scales appropriately across all source systems."""
+    
+    size_multipliers = {
+        'small': 0.2,   # 1K patients
+        'medium': 1.0,  # 5K patients  
+        'large': 5.0    # 25K patients
+    }
+    
+    multiplier = size_multipliers.get(size, 1.0)
+    target_patients = int(base_patients * multiplier)
+    
+    # Scale all related data proportionally
+    return {
+        'patients': target_patients,
+        'encounters': target_patients * 5,         # ~5 encounters per patient
+        'financial_records': target_patients * 5,  # Financial data for all encounters
+        'engagement_activities': target_patients * 3, # ~3 portal activities per patient
+        'clinical_notes': target_patients * 10,    # ~10 notes per patient
+        'provider_records': max(50, target_patients // 20), # 1 provider per 20 patients
+        'department_records': 15  # Fixed number of departments
+    }
+```
+
+## Quality Assurance Requirements
+
+### Realistic Data Patterns
+- Financial charges must correlate with clinical complexity
+- Engagement scores must reflect realistic pediatric family patterns
+- Age distributions must follow pediatric population statistics
+- Insurance mix must reflect Texas pediatric demographics
+
+### Data Integrity Checks
+```python
+def validate_multi_source_data_integrity(generated_data: Dict) -> List[str]:
+    """Validate data integrity across all source systems."""
+    
+    issues = []
+    
+    # Ensure every encounter has corresponding financial data
+    # Ensure patient engagement patterns are age-appropriate
+    # Ensure provider assignments are realistic
+    # Ensure department utilization matches capacity
+    
+    return issues
+```
+
+## Reference Files
+- Main data generation orchestrator: [python/data_generation/generate_tch_data.py](mdc:python/data_generation/generate_tch_data.py)
+- Pediatric data generator: [python/data_generation/pediatric_data_generator.py](mdc:python/data_generation/pediatric_data_generator.py)
+- Architecture standards: [.cursor/rules/tch-architecture.mdc](mdc:.cursor/rules/tch-architecture.mdc)

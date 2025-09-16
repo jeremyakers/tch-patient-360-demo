@@ -1,0 +1,488 @@
+---
+globs: sql/**/*.sql
+---
+
+# TCH Patient 360 PoC - SQL Development Standards
+
+## Multi-Source Dynamic Tables
+
+**TCH VALUE PROPOSITION**: Multi-source data integration is TCH's #1 pain point with SQL Server. EVERY query must demonstrate joining multiple source systems to showcase Snowflake's ease of integration.
+
+### Source System Schema Standards
+All SQL scripts MUST follow the established source system schema patterns and ALWAYS demonstrate multi-source integration:
+
+```sql
+-- Epic EHR (Primary clinical data)
+EPIC.PATIENTS
+EPIC.ENCOUNTERS
+EPIC.DIAGNOSES
+EPIC.LAB_RESULTS
+EPIC.MEDICATIONS
+EPIC.VITAL_SIGNS
+EPIC.IMAGING_STUDIES
+
+-- Workday HCM (Provider and operational data)
+WORKDAY.PROVIDERS
+WORKDAY.DEPARTMENTS
+
+-- Oracle ERP (Financial data)
+ORACLE_ERP.ENCOUNTER_FINANCIALS
+
+-- Salesforce CRM (Patient engagement data)
+SALESFORCE.PATIENT_PORTAL_ACTIVITY
+```
+
+### Dynamic Table Implementation Standards
+
+**CRITICAL**: Dynamic Tables are a KEY VALUE PROPOSITION for TCH. They cannot do incremental refreshes in SQL Server/Health Catalyst. MAXIMIZE Dynamic Table usage to showcase this capability.
+
+#### Dynamic Table Design Principles
+- **PREFER** Dynamic Tables over traditional views/tables
+- **SHOWCASE** incremental refresh capabilities  
+- **DEMONSTRATE** real-time data availability
+- **HIGHLIGHT** automatic dependency management
+- **EMPHASIZE** elimination of complex ETL processes
+
+#### Patient Master Integration
+```sql
+CREATE OR REPLACE DYNAMIC TABLE CONFORMED.PATIENT_MASTER
+TARGET_LAG = '2 minutes'
+WAREHOUSE = TCH_COMPUTE_WH
+AS
+SELECT 
+    -- Generate surrogate key using ROW_NUMBER pattern
+    ROW_NUMBER() OVER (ORDER BY ep.patient_id) AS patient_key,
+    
+    -- Source identifiers
+    ep.patient_id,
+    ep.mrn,
+    
+    -- Demographics with standardization
+    ep.first_name,
+    ep.last_name,
+    CONCAT(COALESCE(ep.first_name, ''), ' ', COALESCE(ep.last_name, '')) AS full_name,
+    ep.date_of_birth,
+    DATEDIFF('year', ep.date_of_birth, CURRENT_DATE()) AS current_age,
+    
+    -- Standardized categorical fields
+    CASE 
+        WHEN UPPER(ep.gender) = 'M' THEN 'Male'
+        WHEN UPPER(ep.gender) = 'F' THEN 'Female'
+        ELSE 'Unknown'
+    END AS gender,
+    
+    COALESCE(ep.race, 'Unknown') AS race,
+    COALESCE(ep.ethnicity, 'Unknown') AS ethnicity,
+    
+    -- Risk stratification based on chronic conditions
+    CASE 
+        WHEN chronic_conditions.condition_count >= 3 THEN 'HIGH_RISK'
+        WHEN chronic_conditions.condition_count >= 1 THEN 'MODERATE_RISK'
+        ELSE 'LOW_RISK'
+    END AS risk_category,
+    
+    -- Source tracking and SCD Type 2 fields
+    'EPIC' AS source_system,
+    CURRENT_TIMESTAMP() AS created_date,
+    CURRENT_TIMESTAMP() AS updated_date,
+    CURRENT_DATE() AS effective_date,
+    DATE '9999-12-31' AS expiration_date,
+    TRUE AS is_current
+
+FROM EPIC.PATIENTS ep
+
+-- Subquery for chronic condition calculation
+LEFT JOIN (
+    SELECT 
+        patient_id,
+        COUNT(DISTINCT diagnosis_code) AS condition_count
+    FROM EPIC.DIAGNOSES
+    WHERE diagnosis_code IN (
+        'J45.9',   -- Asthma
+        'F90.9',   -- ADHD
+        'E10.9',   -- Type 1 Diabetes
+        'E66.9',   -- Obesity
+        'F84.0',   -- Autism
+        'G40.909', -- Epilepsy
+        'Q21.0'    -- Congenital heart defect
+    )
+    GROUP BY patient_id
+) chronic_conditions ON ep.patient_id = chronic_conditions.patient_id;
+```
+
+#### Financial Fact Integration (Oracle ERP)
+```sql
+CREATE OR REPLACE DYNAMIC TABLE CONFORMED.FINANCIAL_FACT
+TARGET_LAG = '30 minutes'
+WAREHOUSE = TCH_COMPUTE_WH
+AS
+SELECT 
+    -- Generate surrogate key
+    ROW_NUMBER() OVER (ORDER BY oef.financial_id) AS financial_key,
+    
+    -- Link to encounter and patient dimensions
+    es.encounter_key,
+    es.patient_key,
+    oef.encounter_id,
+    
+    -- Financial metrics from Oracle ERP
+    oef.total_charges,
+    oef.insurance_payments,
+    oef.patient_payments,
+    oef.adjustments,
+    oef.balance,
+    oef.payer_name,
+    oef.financial_class,
+    
+    -- Calculated financial metrics
+    CASE 
+        WHEN es.length_of_stay > 0 
+        THEN oef.total_charges / es.length_of_stay 
+        ELSE oef.total_charges 
+    END AS cost_per_day,
+    
+    (oef.insurance_payments + oef.patient_payments - oef.total_charges) AS margin_dollars,
+    
+    CASE 
+        WHEN oef.total_charges > 0 
+        THEN ((oef.insurance_payments + oef.patient_payments - oef.total_charges) / oef.total_charges) * 100
+        ELSE 0 
+    END AS margin_percentage,
+    
+    -- High-cost episode flagging  
+    CASE 
+        WHEN oef.total_charges > 50000 THEN 'HIGH_COST'
+        WHEN oef.total_charges > 10000 THEN 'MODERATE_COST'
+        ELSE 'STANDARD_COST'
+    END AS cost_category,
+    
+    -- Source tracking
+    'ORACLE_ERP' AS source_system,
+    CURRENT_TIMESTAMP() AS created_date,
+    CURRENT_TIMESTAMP() AS updated_date
+
+FROM ORACLE_ERP.ENCOUNTER_FINANCIALS oef
+
+-- Join to encounter summary for encounter_key and patient_key
+INNER JOIN CONFORMED.ENCOUNTER_SUMMARY es 
+    ON oef.encounter_id = es.encounter_id;
+```
+
+#### Engagement Fact Integration (Salesforce)
+```sql
+CREATE OR REPLACE DYNAMIC TABLE CONFORMED.ENGAGEMENT_FACT
+TARGET_LAG = '1 hour'
+WAREHOUSE = TCH_COMPUTE_WH
+AS
+SELECT 
+    -- Generate surrogate key
+    ROW_NUMBER() OVER (ORDER BY spa.activity_id) AS engagement_key,
+    
+    -- Link to patient dimension
+    pm.patient_key,
+    spa.patient_id,
+    
+    -- Activity details
+    spa.activity_type,
+    spa.activity_date,
+    spa.description,
+    spa.status,
+    
+    -- Calculated engagement metrics
+    portal_metrics.login_count_30_days AS portal_logins_last_30_days,
+    portal_metrics.message_count_30_days AS messages_sent_last_30_days,
+    
+    -- Digital health adoption scoring
+    CASE 
+        WHEN pm.current_age <= 12 THEN  -- Parent-managed care
+            CASE 
+                WHEN portal_metrics.login_count_30_days >= 8 THEN 'High'
+                WHEN portal_metrics.login_count_30_days >= 3 THEN 'Medium'
+                ELSE 'Low'
+            END
+        WHEN pm.current_age <= 17 THEN  -- Transitional care
+            CASE 
+                WHEN portal_metrics.login_count_30_days >= 4 THEN 'High'
+                WHEN portal_metrics.login_count_30_days >= 1 THEN 'Medium'
+                ELSE 'Low'
+            END
+        ELSE  -- Young adult self-care
+            CASE 
+                WHEN portal_metrics.login_count_30_days >= 10 THEN 'High'
+                WHEN portal_metrics.login_count_30_days >= 4 THEN 'Medium'
+                ELSE 'Low'
+            END
+    END AS digital_health_adoption_level,
+    
+    -- Engagement score calculation (0-100)
+    LEAST(100, 
+        (portal_metrics.login_count_30_days * 3) +
+        (portal_metrics.message_count_30_days * 2) +
+        (portal_metrics.unique_activity_types * 5) +
+        CASE WHEN pm.current_age <= 12 THEN 10 ELSE 0 END  -- Parent engagement bonus
+    ) AS engagement_score,
+    
+    -- Source tracking
+    'SALESFORCE' AS source_system,
+    CURRENT_TIMESTAMP() AS created_date,
+    CURRENT_TIMESTAMP() AS updated_date
+
+FROM SALESFORCE.PATIENT_PORTAL_ACTIVITY spa
+
+-- Join to patient master for patient_key and age-based calculations
+INNER JOIN CONFORMED.PATIENT_MASTER pm 
+    ON spa.patient_id = pm.patient_id 
+    AND pm.is_current = TRUE
+
+-- Calculate portal activity metrics for last 30 days
+LEFT JOIN (
+    SELECT 
+        patient_id,
+        COUNT(CASE WHEN activity_type = 'Portal Login' THEN 1 END) AS login_count_30_days,
+        COUNT(CASE WHEN activity_type = 'Message' THEN 1 END) AS message_count_30_days,
+        COUNT(DISTINCT activity_type) AS unique_activity_types
+    FROM SALESFORCE.PATIENT_PORTAL_ACTIVITY 
+    WHERE activity_date >= DATEADD('day', -30, CURRENT_DATE())
+    GROUP BY patient_id
+) portal_metrics ON spa.patient_id = portal_metrics.patient_id;
+```
+
+## Presentation Layer Multi-Source Views
+
+### Patient 360 Comprehensive View
+```sql
+CREATE OR REPLACE VIEW PRESENTATION.PATIENT_360 AS
+SELECT 
+    -- Patient demographics (Epic)
+    pm.patient_key,
+    pm.patient_id,
+    pm.mrn,
+    pm.full_name,
+    pm.current_age,
+    pm.gender,
+    pm.race,
+    pm.ethnicity,
+    pm.primary_insurance,
+    pm.risk_category,
+    pm.chronic_conditions_count,
+    
+    -- Clinical summary (Epic)
+    pm.last_encounter_date,
+    pm.total_encounters,
+    DATEDIFF('day', pm.last_encounter_date, CURRENT_DATE()) AS days_since_last_visit,
+    
+    -- Financial summary (Oracle ERP)
+    financial_summary.total_lifetime_charges,
+    financial_summary.total_insurance_payments,
+    financial_summary.total_outstanding_balance,
+    financial_summary.avg_cost_per_encounter,
+    financial_summary.high_cost_episodes,
+    financial_summary.primary_payer,
+    
+    -- Engagement summary (Salesforce)
+    engagement_summary.current_engagement_score,
+    engagement_summary.digital_adoption_level,
+    engagement_summary.portal_logins_last_30_days,
+    engagement_summary.last_portal_activity,
+    
+    -- Provider context (Workday)
+    provider_context.primary_care_provider,
+    provider_context.most_visited_department,
+    provider_context.care_team_size
+
+FROM CONFORMED.PATIENT_MASTER pm
+
+-- Financial summary aggregation
+LEFT JOIN (
+    SELECT 
+        patient_key,
+        SUM(total_charges) AS total_lifetime_charges,
+        SUM(insurance_payments) AS total_insurance_payments,
+        SUM(balance) AS total_outstanding_balance,
+        AVG(total_charges) AS avg_cost_per_encounter,
+        COUNT(CASE WHEN cost_category = 'HIGH_COST' THEN 1 END) AS high_cost_episodes,
+        MODE(payer_name) AS primary_payer
+    FROM CONFORMED.FINANCIAL_FACT
+    GROUP BY patient_key
+) financial_summary ON pm.patient_key = financial_summary.patient_key
+
+-- Engagement summary aggregation  
+LEFT JOIN (
+    SELECT 
+        patient_key,
+        MAX(engagement_score) AS current_engagement_score,
+        MODE(digital_health_adoption_level) AS digital_adoption_level,
+        MAX(portal_logins_last_30_days) AS portal_logins_last_30_days,
+        MAX(activity_date) AS last_portal_activity
+    FROM CONFORMED.ENGAGEMENT_FACT
+    GROUP BY patient_key
+) engagement_summary ON pm.patient_key = engagement_summary.patient_key
+
+-- Provider context from encounters and Workday
+LEFT JOIN (
+    SELECT 
+        es.patient_key,
+        MODE(es.attending_physician) AS primary_care_provider,
+        MODE(es.department_name) AS most_visited_department,
+        COUNT(DISTINCT es.attending_physician) AS care_team_size
+    FROM CONFORMED.ENCOUNTER_SUMMARY es
+    WHERE es.encounter_date >= DATEADD('year', -2, CURRENT_DATE())
+    GROUP BY es.patient_key
+) provider_context ON pm.patient_key = provider_context.patient_key
+
+WHERE pm.is_current = TRUE;
+```
+
+### Financial Analytics View
+```sql
+CREATE OR REPLACE VIEW PRESENTATION.FINANCIAL_ANALYTICS AS
+SELECT 
+    -- Patient demographics
+    pm.patient_id,
+    pm.current_age,
+    pm.gender,
+    pm.primary_insurance,
+    pm.risk_category,
+    
+    -- Department context (Workday)
+    dd.department_name,
+    dd.service_line,
+    dd.campus,
+    
+    -- Financial metrics (Oracle ERP)
+    ff.total_charges,
+    ff.insurance_payments,
+    ff.patient_payments,
+    ff.balance,
+    ff.cost_per_day,
+    ff.margin_dollars,
+    ff.margin_percentage,
+    ff.cost_category,
+    ff.payer_name,
+    ff.financial_class,
+    
+    -- Clinical context
+    es.encounter_type,
+    es.length_of_stay,
+    es.chief_complaint,
+    df.diagnosis_description,
+    
+    -- Cost effectiveness metrics
+    ff.total_charges / NULLIF(es.length_of_stay, 0) AS daily_cost_efficiency,
+    
+    CASE 
+        WHEN ff.margin_percentage > 10 THEN 'Profitable'
+        WHEN ff.margin_percentage > 0 THEN 'Break Even'
+        ELSE 'Loss'
+    END AS profitability_status
+
+FROM CONFORMED.FINANCIAL_FACT ff
+
+-- Join to patient master
+INNER JOIN CONFORMED.PATIENT_MASTER pm 
+    ON ff.patient_key = pm.patient_key 
+    AND pm.is_current = TRUE
+
+-- Join to encounter summary for clinical context
+INNER JOIN CONFORMED.ENCOUNTER_SUMMARY es 
+    ON ff.encounter_key = es.encounter_key
+
+-- Join to department dimension for Workday context
+LEFT JOIN CONFORMED.DEPARTMENT_DIM dd 
+    ON es.department_name = dd.department_name
+
+-- Join to primary diagnosis
+LEFT JOIN (
+    SELECT 
+        encounter_key,
+        FIRST_VALUE(diagnosis_description) OVER (
+            PARTITION BY encounter_key 
+            ORDER BY diagnosis_date DESC
+        ) AS diagnosis_description
+    FROM CONFORMED.DIAGNOSIS_FACT
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY encounter_key ORDER BY diagnosis_date DESC) = 1
+) df ON es.encounter_key = df.encounter_key;
+```
+
+## Performance Optimization Standards
+
+### Clustering Key Requirements
+```sql
+-- All fact tables must be clustered on patient_key and date fields
+ALTER TABLE CONFORMED.FINANCIAL_FACT 
+CLUSTER BY (patient_key, created_date);
+
+ALTER TABLE CONFORMED.ENGAGEMENT_FACT 
+CLUSTER BY (patient_key, activity_date);
+
+ALTER TABLE CONFORMED.ENCOUNTER_SUMMARY 
+CLUSTER BY (patient_key, encounter_date);
+```
+
+### Query Pattern Standards
+```sql
+-- Always use appropriate warehouse for workload type
+USE WAREHOUSE TCH_COMPUTE_WH;     -- For Dynamic Table refreshes
+USE WAREHOUSE TCH_ANALYTICS_WH;   -- For interactive analytics
+USE WAREHOUSE TCH_AI_ML_WH;       -- For Cortex operations
+
+-- Use CTEs for complex multi-source queries
+WITH patient_financial_summary AS (
+    SELECT 
+        patient_key,
+        SUM(total_charges) AS total_charges,
+        COUNT(*) AS encounter_count
+    FROM CONFORMED.FINANCIAL_FACT
+    GROUP BY patient_key
+),
+patient_engagement_summary AS (
+    SELECT 
+        patient_key,
+        AVG(engagement_score) AS avg_engagement_score
+    FROM CONFORMED.ENGAGEMENT_FACT
+    GROUP BY patient_key
+)
+SELECT 
+    pm.patient_id,
+    pfs.total_charges,
+    pes.avg_engagement_score
+FROM CONFORMED.PATIENT_MASTER pm
+LEFT JOIN patient_financial_summary pfs ON pm.patient_key = pfs.patient_key
+LEFT JOIN patient_engagement_summary pes ON pm.patient_key = pes.patient_key
+WHERE pm.is_current = TRUE;
+```
+
+## Troubleshooting SQL Operations
+
+### Telemetry Access for SQL Debugging
+```sql
+-- Query Snowflake telemetry for SQL operation logs
+SELECT * FROM SNOWFLAKE.TELEMETRY.EVENTS_VIEW 
+WHERE VALUE LIKE '%TCH_PATIENT_360%'
+AND VALUE LIKE '%error%'
+ORDER BY TIMESTAMP DESC;
+
+-- Find Dynamic Table specific issues
+SELECT * FROM SNOWFLAKE.TELEMETRY.EVENTS_VIEW 
+WHERE VALUE LIKE '%DYNAMIC_TABLE%'
+ORDER BY TIMESTAMP DESC;
+```
+
+**Note**: The `VALUE` column contains the actual log text output from Snowflake operations.
+
+### Manual SQL Execution
+Use SnowCLI for manual SQL operations:
+```bash
+snow sql -q "SELECT * FROM CONFORMED.PATIENT_MASTER LIMIT 5;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_ANALYTICS_WH
+```
+
+## Reference Files
+- Dynamic table definitions: [sql/dynamic_tables/](mdc:sql/dynamic_tables/)
+- Presentation layer: [sql/setup/04_presentation_tables.sql](mdc:sql/setup/04_presentation_tables.sql)
+- Troubleshooting guide: [.cursor/rules/troubleshooting.mdc](mdc:.cursor/rules/troubleshooting.mdc)
+- Architecture standards: [.cursor/rules/tch-architecture.mdc](mdc:.cursor/rules/tch-architecture.mdc)

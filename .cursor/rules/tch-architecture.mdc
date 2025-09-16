@@ -1,0 +1,178 @@
+---
+alwaysApply: true
+---
+
+# TCH Patient 360 PoC - Architecture & Design Standards
+
+## Database Architecture Requirements
+
+### Multi-Source Data Integration
+**TCH's #1 VALUE PROPOSITION**: The PoC demonstrates Snowflake's ability to integrate data from multiple healthcare systems - solving TCH's primary pain point with their current SQL Server/Health Catalyst environment that struggles with 70+ data sources:
+
+#### Source System Schemas (Raw Data)
+```sql
+-- Primary clinical data from Epic EHR
+EPIC.PATIENTS
+EPIC.ENCOUNTERS  
+EPIC.DIAGNOSES
+EPIC.LAB_RESULTS
+EPIC.MEDICATIONS
+EPIC.VITAL_SIGNS
+EPIC.IMAGING_STUDIES
+
+-- Provider and operational data from Workday HCM
+WORKDAY.PROVIDERS
+WORKDAY.DEPARTMENTS
+
+-- Financial data from Oracle ERP
+ORACLE_ERP.ENCOUNTER_FINANCIALS
+
+-- Patient engagement data from Salesforce CRM
+SALESFORCE.PATIENT_PORTAL_ACTIVITY
+```
+
+#### Dynamic Tables Architecture
+**CRITICAL TCH VALUE**: Dynamic Tables are a KEY DIFFERENTIATOR vs SQL Server/Health Catalyst which cannot do incremental refreshes. All conformed layer tables MUST be implemented as Dynamic Tables with appropriate TARGET_LAG to showcase this capability:
+
+```sql
+-- Patient Master: Real-time patient data consolidation
+CONFORMED.PATIENT_MASTER (TARGET_LAG = '2 minutes')
+
+-- Encounter Summary: Near real-time encounter processing  
+CONFORMED.ENCOUNTER_SUMMARY (TARGET_LAG = '15 minutes')
+
+-- Provider Dimension: Provider reference data from Workday
+CONFORMED.PROVIDER_DIM (TARGET_LAG = '1 hour')
+
+-- Department Dimension: Department reference data from Workday
+CONFORMED.DEPARTMENT_DIM (TARGET_LAG = '1 hour')
+
+-- Financial Fact: Financial data integration from Oracle ERP
+CONFORMED.FINANCIAL_FACT (TARGET_LAG = '30 minutes')
+
+-- Engagement Fact: Patient engagement metrics from Salesforce
+CONFORMED.ENGAGEMENT_FACT (TARGET_LAG = '1 hour')
+```
+
+#### Warehouse Strategy
+Use dedicated warehouses for different workload types:
+- **TCH_COMPUTE_WH**: Data processing and Dynamic Table refreshes
+- **TCH_ANALYTICS_WH**: Interactive analytics and Streamlit queries
+- **TCH_AI_ML_WH**: Cortex AI/ML workloads
+
+### Data Model Standards
+
+#### Surrogate Key Generation
+Use ROW_NUMBER() pattern for generating surrogate keys in Dynamic Tables:
+```sql
+ROW_NUMBER() OVER (ORDER BY source_primary_key) AS dimension_key
+```
+
+#### Multi-Source Integration Patterns
+Always include source_system tracking:
+```sql
+'EPIC' AS source_system,
+'WORKDAY' AS source_system,
+'ORACLE_ERP' AS source_system,
+'SALESFORCE' AS source_system
+```
+
+#### SCD Type 2 Implementation
+For slowly changing dimensions, implement:
+```sql
+effective_date DATE,
+expiration_date DATE,
+is_current BOOLEAN
+```
+
+## Presentation Layer Requirements
+
+### Financial Analytics Integration
+All financial analytics MUST integrate Oracle ERP data:
+```sql
+-- Cost per encounter by department and condition
+-- High-cost patient identification 
+-- Payer mix optimization
+-- Value-based care ROI metrics
+```
+
+### Patient Engagement Analytics
+All engagement analytics MUST integrate Salesforce data:
+```sql
+-- Digital health adoption scoring
+-- Portal usage correlation with outcomes
+-- Family engagement tracking
+-- Communication effectiveness metrics
+```
+
+### Multi-Source Views
+Presentation layer views MUST demonstrate data integration across all source systems:
+```sql
+-- Example: Comprehensive patient analytics
+SELECT 
+    pm.patient_id,              -- From Epic
+    pm.risk_category,           -- From Epic (derived)
+    pd.specialty,               -- From Workday
+    ff.total_charges,           -- From Oracle ERP
+    ef.engagement_score         -- From Salesforce
+FROM CONFORMED.PATIENT_MASTER pm
+LEFT JOIN CONFORMED.PROVIDER_DIM pd ON ...
+LEFT JOIN CONFORMED.FINANCIAL_FACT ff ON ...
+LEFT JOIN CONFORMED.ENGAGEMENT_FACT ef ON ...
+```
+
+## Cortex AI/ML Requirements
+
+### Semantic Model Integration
+Cortex Analyst semantic model MUST include all data sources:
+```yaml
+tables:
+  - name: "patient_360"
+    # Includes clinical, financial, and engagement data
+  - name: "financial_analytics" 
+    # Oracle ERP financial metrics
+  - name: "engagement_analytics"
+    # Salesforce engagement metrics
+```
+
+### Search Services
+Cortex Search MUST index unstructured data from multiple sources:
+- Clinical notes (Epic)
+- Radiology reports (Epic)
+- Patient communications (Salesforce)
+
+## Data Generation Requirements
+
+### Multi-Source Data Generation
+Data generation MUST create realistic data for all source systems:
+
+#### Oracle ERP Financial Data
+```python
+def generate_financial_data(encounters: List[Dict]) -> List[Dict]:
+    """Generate realistic financial data for Oracle ERP integration."""
+    # Cost per encounter based on department and complexity
+    # Insurance payment patterns by payer type
+    # Patient financial responsibility calculations
+    # Margin analysis for value-based care
+```
+
+#### Salesforce Engagement Data  
+```python
+def generate_engagement_data(patients: List[Dict]) -> List[Dict]:
+    """Generate realistic patient engagement data for Salesforce integration."""
+    # Portal login patterns by age group
+    # Communication preferences and response rates
+    # Digital health adoption scores
+    # Family engagement metrics for pediatric care
+```
+
+### Data Volume Scaling
+Support three deployment tiers:
+- **Small** (1K patients): Quick testing
+- **Medium** (5K patients): Standard demos  
+- **Large** (25K patients): Performance validation
+
+## Reference Files
+- Database structure: [design.md](mdc:design.md)
+- Business requirements: [requirements.md](mdc:requirements.md)
+- Deployment scripts: [deploy/deploy_tch_poc.sh](mdc:deploy/deploy_tch_poc.sh)

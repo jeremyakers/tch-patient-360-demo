@@ -1,0 +1,312 @@
+---
+globs: deploy/**/*
+---
+
+# TCH Patient 360 PoC - Deployment Standards
+
+## Cross-Platform Deployment Requirements
+
+### Script Consistency Requirements
+**CRITICAL**: Both bash and PowerShell deployment scripts MUST maintain feature parity:
+
+#### Feature Parity Checklist
+- [ ] All command-line arguments available in both scripts
+- [ ] Identical deployment step names and ordering
+- [ ] Equivalent error handling and logging
+- [ ] Same data generation size options
+- [ ] Identical resume functionality
+- [ ] Same authentication method support
+- [ ] Equivalent help documentation
+
+#### Deployment Steps (Must be identical in both scripts)
+1. **prerequisites** - Check dependencies and setup
+2. **connection** - Setup SnowCLI connection  
+3. **data-generation** - Generate mock data for all source systems
+4. **clean-deployment** - Clean existing deployment (if --clean-deploy)
+5. **database-structure** - Deploy database and schema structure
+6. **data-upload** - Upload data files to Snowflake stages
+7. **data-ingest** - Ingest data from stages into raw tables
+8. **dynamic-tables** - Deploy Dynamic Tables for all source systems
+9. **presentation** - Deploy presentation layer views
+10. **unstructured-data-load** - Load unstructured clinical documents
+11. **cortex-search** - Setup Cortex Search services
+12. **cortex-analyst** - Setup Cortex Analyst semantic model
+13. **streamlit** - Deploy Streamlit application
+14. **verification** - Verify deployment across all source systems
+
+### Oracle ERP and Salesforce Integration Requirements
+
+#### Data Loading Extensions
+Both deployment scripts MUST include Oracle ERP and Salesforce data loading:
+
+```bash
+# Bash script additions
+echo "Loading Oracle ERP financial data..."
+snow --config-file "$SNOW_CONFIG_FILE" sql -q "
+COPY INTO ORACLE_ERP.ENCOUNTER_FINANCIALS
+FROM @TCH_PATIENT_360_POC.RAW_DATA.PATIENT_DATA_STAGE/encounter_financials.csv.gz
+FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1)
+" -c tch_poc
+
+echo "Loading Salesforce engagement data..."
+snow --config-file "$SNOW_CONFIG_FILE" sql -q "
+COPY INTO SALESFORCE.PATIENT_PORTAL_ACTIVITY  
+FROM @TCH_PATIENT_360_POC.RAW_DATA.PATIENT_DATA_STAGE/patient_portal_activity.csv.gz
+FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1)
+" -c tch_poc
+```
+
+```powershell
+# PowerShell script additions
+Write-Log "Loading Oracle ERP financial data..."
+snow --config-file $env:SNOW_CONFIG_FILE sql -q "
+COPY INTO ORACLE_ERP.ENCOUNTER_FINANCIALS
+FROM @TCH_PATIENT_360_POC.RAW_DATA.PATIENT_DATA_STAGE/encounter_financials.csv.gz
+FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1)
+" -c tch_poc
+
+Write-Log "Loading Salesforce engagement data..."
+snow --config-file $env:SNOW_CONFIG_FILE sql -q "
+COPY INTO SALESFORCE.PATIENT_PORTAL_ACTIVITY
+FROM @TCH_PATIENT_360_POC.RAW_DATA.PATIENT_DATA_STAGE/patient_portal_activity.csv.gz  
+FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1)
+" -c tch_poc
+```
+
+#### Verification Extensions
+Deployment verification MUST check all four source systems:
+
+```sql
+-- Verify Epic data
+SELECT 'Epic patients loaded: ' || COUNT(*) FROM EPIC.PATIENTS;
+SELECT 'Epic encounters loaded: ' || COUNT(*) FROM EPIC.ENCOUNTERS;
+
+-- Verify Workday data  
+SELECT 'Workday providers loaded: ' || COUNT(*) FROM WORKDAY.PROVIDERS;
+SELECT 'Workday departments loaded: ' || COUNT(*) FROM WORKDAY.DEPARTMENTS;
+
+-- Verify Oracle ERP data
+SELECT 'Oracle ERP financials loaded: ' || COUNT(*) FROM ORACLE_ERP.ENCOUNTER_FINANCIALS;
+
+-- Verify Salesforce data
+SELECT 'Salesforce activities loaded: ' || COUNT(*) FROM SALESFORCE.PATIENT_PORTAL_ACTIVITY;
+
+-- Verify Dynamic Tables created
+SELECT 'Dynamic Tables count: ' || COUNT(*) 
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE TABLE_TYPE = 'DYNAMIC TABLE';
+
+-- Verify multi-source integration
+SELECT 'Multi-source patient records: ' || COUNT(*)
+FROM CONFORMED.PATIENT_MASTER pm
+INNER JOIN CONFORMED.FINANCIAL_FACT ff ON pm.patient_key = ff.patient_key
+INNER JOIN CONFORMED.ENGAGEMENT_FACT ef ON pm.patient_key = ef.patient_key;
+```
+
+## Data Generation Integration
+
+### Size Option Requirements
+Both scripts MUST support identical data generation sizes:
+
+```bash
+# Bash implementation
+case $DATA_SIZE in
+    small)
+        size_param="--patients 1000"
+        ;;
+    medium)
+        size_param="--patients 5000"  
+        ;;
+    large)
+        size_param="--patients 25000"
+        ;;
+esac
+
+# Must generate ALL source system data
+python3 generate_tch_data.py $size_param --compress --include-financial --include-engagement
+```
+
+```powershell
+# PowerShell implementation  
+$sizeParam = switch ($DataSize) {
+    "small" { "--patients 1000" }
+    "medium" { "--patients 5000" }
+    "large" { "--patients 25000" }
+}
+
+# Must generate ALL source system data
+python generate_tch_data.py $sizeParam.Split(' ') --compress --include-financial --include-engagement
+```
+
+### Multi-Source Data Upload
+Both scripts MUST upload data for all source systems:
+
+```bash
+# Upload structured data for all source systems
+snow --config-file "$SNOW_CONFIG_FILE" stage copy \
+    "$PROJECT_ROOT/data/mock_data/structured/*.csv.gz" \
+    @TCH_PATIENT_360_POC.RAW_DATA.PATIENT_DATA_STAGE \
+    --overwrite --parallel 8 --auto-compress -c tch_poc
+
+# Verify all expected files are uploaded
+expected_files=("patients.csv.gz" "encounters.csv.gz" "diagnoses.csv.gz" 
+                "lab_results.csv.gz" "medications.csv.gz" "vital_signs.csv.gz"
+                "imaging_studies.csv.gz" "providers.csv.gz" "departments.csv.gz"
+                "encounter_financials.csv.gz" "patient_portal_activity.csv.gz")
+```
+
+## Resume Functionality
+
+### State Tracking
+Both scripts MUST support resuming from any deployment step:
+
+```bash
+# Bash implementation
+should_execute_step() {
+    local step_name="$1"
+    
+    if [[ -z "${RESUME_STEP:-}" ]]; then
+        return 0
+    fi
+    
+    # Step order must be identical in both scripts
+    local steps=(
+        "prerequisites" "connection" "data-generation" "clean-deployment"
+        "database-structure" "data-upload" "data-ingest" "dynamic-tables"
+        "presentation" "unstructured-data-load" "cortex-search" 
+        "cortex-analyst" "streamlit" "verification"
+    )
+}
+```
+
+### Error Recovery
+Both scripts MUST handle errors consistently:
+
+```bash
+# Bash error handling
+cleanup_on_error() {
+    log_error "Deployment failed at step: ${CURRENT_STEP:-unknown}"
+    log_error "Use --resume-step '${CURRENT_STEP}' to continue from this point"
+    log_error "Check $LOG_FILE for details"
+    rm -rf "$TEMP_DIR" 2>/dev/null || true
+    exit 1
+}
+```
+
+```powershell
+# PowerShell error handling
+function Cleanup-OnError {
+    Write-Log "Deployment failed at step: $CurrentStep" "ERROR"
+    Write-Log "Use -ResumeStep '$CurrentStep' to continue from this point" "ERROR"  
+    Write-Log "Check $LogFile for details" "ERROR"
+    if (Test-Path $TempDir) {
+        Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    exit 1
+}
+```
+
+## Configuration Management
+
+### Environment Variables
+Both scripts MUST support identical authentication methods:
+
+```bash
+# Bash configuration
+if [[ "$AUTH_METHOD" == "password" ]]; then
+    echo "password = \"$PASSWORD\"" >> "$config_file"
+else
+    echo "authenticator = \"SNOWFLAKE_JWT\"" >> "$config_file"
+    echo "private_key_path = \"$PRIVATE_KEY_PATH\"" >> "$config_file"
+    if [[ -n "${PRIVATE_KEY_PASSPHRASE:-}" ]]; then
+        echo "private_key_passphrase = \"$PRIVATE_KEY_PASSPHRASE\"" >> "$config_file"
+    fi
+fi
+```
+
+### Help Documentation
+Both scripts MUST provide identical help text and examples.
+
+## Testing Requirements
+
+### Deployment Validation
+Both scripts MUST include comprehensive validation:
+
+```sql
+-- Multi-source data validation
+SELECT 
+    'Epic' as source_system,
+    COUNT(DISTINCT patient_id) as patient_count,
+    COUNT(DISTINCT encounter_id) as encounter_count
+FROM EPIC.PATIENTS p 
+LEFT JOIN EPIC.ENCOUNTERS e ON p.patient_id = e.patient_id
+
+UNION ALL
+
+SELECT 
+    'Financial Integration' as source_system,
+    COUNT(DISTINCT patient_id) as patient_count,
+    COUNT(DISTINCT encounter_id) as encounter_count
+FROM ORACLE_ERP.ENCOUNTER_FINANCIALS
+
+UNION ALL
+
+SELECT 
+    'Engagement Integration' as source_system, 
+    COUNT(DISTINCT patient_id) as patient_count,
+    0 as encounter_count
+FROM SALESFORCE.PATIENT_PORTAL_ACTIVITY;
+```
+
+## Manual SnowCLI Operations
+
+### Standard Connection Pattern
+For manual troubleshooting and verification during deployment:
+
+```bash
+# Standard SnowCLI command structure
+snow sql -q "YOUR_QUERY_HERE;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+### Authentication Setup
+```bash
+# Password authentication (set environment variable)
+export SNOWFLAKE_PASSWORD=your_password
+
+# Keypair authentication (add flag)
+--private-key-path keypair/rsa_key.p8
+```
+
+### Deployment Verification Commands
+```bash
+# Verify all source systems data loaded
+snow sql -q "
+SELECT 'EPIC.PATIENTS' as table_name, COUNT(*) as row_count FROM EPIC.PATIENTS
+UNION ALL SELECT 'ORACLE_ERP.ENCOUNTER_FINANCIALS', COUNT(*) FROM ORACLE_ERP.ENCOUNTER_FINANCIALS
+UNION ALL SELECT 'SALESFORCE.PATIENT_PORTAL_ACTIVITY', COUNT(*) FROM SALESFORCE.PATIENT_PORTAL_ACTIVITY
+ORDER BY table_name;" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+
+# Check Dynamic Tables status
+snow sql -q "SELECT table_name, target_lag, last_refresh_time FROM INFORMATION_SCHEMA.TABLES WHERE table_type = 'DYNAMIC TABLE';" \
+  --account SFSENORTHAMERICA-DEMO_JAKERS \
+  --user TCH_PATIENT_360_USER \
+  --role TCH_PATIENT_360_ROLE \
+  --database TCH_PATIENT_360_POC \
+  --warehouse TCH_COMPUTE_WH
+```
+
+## Reference Files
+- Bash deployment script: [deploy/deploy_tch_poc.sh](mdc:deploy/deploy_tch_poc.sh)
+- PowerShell deployment script: [deploy/deploy_tch_poc.ps1](mdc:deploy/deploy_tch_poc.ps1)
+- Troubleshooting guide: [.cursor/rules/troubleshooting.mdc](mdc:.cursor/rules/troubleshooting.mdc)
+- Architecture standards: [.cursor/rules/tch-architecture.mdc](mdc:.cursor/rules/tch-architecture.mdc)

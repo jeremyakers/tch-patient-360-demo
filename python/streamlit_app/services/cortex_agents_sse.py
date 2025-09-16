@@ -5,8 +5,7 @@ Processes streaming responses in real-time for UI updates.
 
 import json
 import logging
-import time
-from typing import Dict, Generator, Optional, Any
+from typing import Dict, Generator, Optional, Any, List
 import _snowflake
 
 logger = logging.getLogger(__name__)
@@ -42,20 +41,28 @@ class SSEProcessor:
                 logger.debug(f"Response is dict with content key, type: {type(content)}")
             
             if content is not None:
+                events = []
                 
-                # Parse the content as JSON
+                # Check if content is SSE format (text with data: lines)
                 if isinstance(content, str):
-                    try:
-                        events = json.loads(content) if content else []
-                        logger.debug(f"Parsed {len(events)} events from JSON")
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse JSON: {e}")
-                        logger.debug(f"Content preview: {content[:500]}")
-                        yield {
-                            "type": "error",
-                            "message": f"Failed to parse response: {e}"
-                        }
-                        return
+                    # Check if it's SSE format
+                    if 'data:' in content or 'event:' in content:
+                        # Parse SSE format
+                        logger.debug("Parsing SSE format response")
+                        events = self._parse_sse_text(content)
+                    else:
+                        # Try to parse as JSON
+                        try:
+                            events = json.loads(content) if content else []
+                            logger.debug(f"Parsed {len(events)} events from JSON")
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse JSON: {e}")
+                            logger.debug(f"Content preview: {content[:500]}")
+                            yield {
+                                "type": "error",
+                                "message": f"Failed to parse response: {e}"
+                            }
+                            return
                 else:
                     events = content if isinstance(content, list) else []
                     
@@ -102,6 +109,82 @@ class SSEProcessor:
                 "message": str(e)
             }
     
+    def _parse_sse_text(self, sse_text: str) -> List[Dict]:
+        """Parse SSE formatted text into events.
+        
+        SSE format:
+        event: <event_type>
+        data: <json_data>
+        
+        data: <json_data>
+        
+        Args:
+            sse_text: Raw SSE formatted text
+            
+        Returns:
+            List of parsed events
+        """
+        events = []
+        current_event = {}
+        current_data = []
+        
+        for line in sse_text.split('\n'):
+            line = line.strip()
+            
+            if not line:
+                # Empty line signals end of event
+                if current_data:
+                    # Combine data lines and parse JSON
+                    data_str = '\n'.join(current_data)
+                    try:
+                        data = json.loads(data_str)
+                        if current_event:
+                            current_event['data'] = data
+                            events.append(current_event)
+                        else:
+                            # Data-only event (no event type)
+                            events.append({'event': 'message', 'data': data})
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Failed to parse SSE data: {e}")
+                        logger.debug(f"Data string: {data_str[:200]}")
+                    
+                    current_event = {}
+                    current_data = []
+            
+            elif line.startswith('event:'):
+                # Event type line
+                event_type = line[6:].strip()
+                current_event['event'] = event_type
+                
+            elif line.startswith('data:'):
+                # Data line
+                data_line = line[5:].strip()
+                if data_line == '[DONE]':
+                    # Special done marker
+                    events.append({'event': 'done', 'data': {}})
+                else:
+                    current_data.append(data_line)
+            
+            elif line.startswith(':'):
+                # Comment line, ignore
+                pass
+        
+        # Handle any remaining data
+        if current_data:
+            data_str = '\n'.join(current_data)
+            try:
+                data = json.loads(data_str)
+                if current_event:
+                    current_event['data'] = data
+                    events.append(current_event)
+                else:
+                    events.append({'event': 'message', 'data': data})
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse final SSE data: {e}")
+        
+        logger.debug(f"Parsed {len(events)} SSE events")
+        return events
+    
     def _process_response_event(self, event: Dict) -> Generator[Dict, None, None]:
         """Process a response event and yield individual content items."""
         data = event.get("data", {})
@@ -117,8 +200,6 @@ class SSEProcessor:
                 
                 if thinking_text:
                     self.current_thinking.append(thinking_text)
-                    # Add small delay to simulate streaming
-                    time.sleep(0.1)
                     yield {
                         "type": "thinking",
                         "text": thinking_text,
@@ -138,8 +219,6 @@ class SSEProcessor:
                     "input": tool_input
                 })
                 
-                # Add small delay to simulate streaming
-                time.sleep(0.05)
                 yield {
                     "type": "tool_use",
                     "tool_type": tool_type,
@@ -159,8 +238,6 @@ class SSEProcessor:
                         # Extract SQL if present
                         if "sql" in json_data:
                             self.current_sql = json_data["sql"]
-                            # Add small delay to simulate streaming
-                            time.sleep(0.05)
                             yield {
                                 "type": "sql",
                                 "query": self.current_sql,
@@ -171,8 +248,6 @@ class SSEProcessor:
                         search_results = json_data.get("search_results", json_data.get("searchResults", []))
                         if search_results:
                             self.search_results.extend(search_results[:5])  # Limit to 5
-                            # Add small delay to simulate streaming
-                            time.sleep(0.05)
                             yield {
                                 "type": "search_results",
                                 "count": len(search_results),
@@ -184,8 +259,6 @@ class SSEProcessor:
                 text = item.get("text", "")
                 if text:
                     self.current_text = text
-                    # Add small delay to simulate streaming
-                    time.sleep(0.05)
                     yield {
                         "type": "response_text",
                         "text": text

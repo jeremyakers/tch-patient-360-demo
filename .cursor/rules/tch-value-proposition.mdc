@@ -1,0 +1,199 @@
+---
+alwaysApply: true
+---
+
+# TCH Patient 360 PoC - Snowflake Value Proposition Standards
+
+## 🚨 CRITICAL: When in Doubt, ASK!
+
+### NEVER GUESS - Always Clarify
+**VERY IMPORTANT**: If you have any uncertainty about how to proceed with a code change or anything else, or if there are multiple potential ways to fix a problem:
+
+1. **STOP** and ask which approach is preferred
+2. **NEVER** guess about what way to proceed  
+3. **ASK** clarifying questions when unsure
+4. **REQUEST** documentation or examples when needed
+
+### Examples of When to Stop and Ask:
+- Multiple ways to implement a feature
+- Uncertainty about data model design
+- Questions about AI/ML function selection
+- Unclear requirements or specifications
+- Performance optimization choices
+- Authentication or security implementations
+
+## Snowflake Value Proposition for Texas Children's Hospital
+
+### 1. Multi-Source Data Integration (PRIMARY VALUE)
+**TCH's #1 Pain Point**: Difficulty joining data from 70+ sources in Health Catalyst/SQL Server
+
+#### Implementation Requirements:
+- **ALWAYS** demonstrate data from multiple source systems in final application
+- **EVERY** major view must show Epic + Workday + Oracle ERP + Salesforce integration
+- **EMPHASIZE** the ease of joining across these systems in Snowflake vs SQL Server complexity
+
+```sql
+-- Example: ALWAYS show multi-source integration
+SELECT 
+    pm.patient_id,              -- Epic clinical data
+    pd.specialty,               -- Workday provider data  
+    ff.total_charges,           -- Oracle ERP financial data
+    ef.engagement_score         -- Salesforce engagement data
+FROM CONFORMED.PATIENT_MASTER pm
+LEFT JOIN CONFORMED.PROVIDER_DIM pd ON ...
+LEFT JOIN CONFORMED.FINANCIAL_FACT ff ON ...  
+LEFT JOIN CONFORMED.ENGAGEMENT_FACT ef ON ...
+```
+
+#### Showcase Messaging:
+- "In SQL Server, this 4-source join would require complex ETL processes"
+- "Snowflake makes multi-source analytics simple and performant"
+- "No need for data marts - query directly across all sources"
+
+### 2. Elastic Compute Scaling (KEY DIFFERENTIATOR)
+**TCH's Pain Point**: Fixed compute resources, can't scale for different workloads
+
+#### Implementation Requirements:
+- **USE** different warehouses for different workload types:
+  - `TCH_COMPUTE_WH`: Heavy data processing and Dynamic Table refreshes
+  - `TCH_ANALYTICS_WH`: Interactive analytics and user queries
+  - `TCH_AI_ML_WH`: AI/ML workloads and Cortex operations
+- **DEMONSTRATE** auto-scaling and right-sizing capabilities
+- **SHOW** cost optimization through workload separation
+
+```sql
+-- Always use appropriate warehouse for the task
+USE WAREHOUSE TCH_COMPUTE_WH;     -- For data processing
+USE WAREHOUSE TCH_ANALYTICS_WH;   -- For user queries  
+USE WAREHOUSE TCH_AI_ML_WH;       -- For AI/ML operations
+```
+
+#### Showcase Messaging:
+- "Scale compute up for complex analytics, down for simple queries"
+- "Pay only for what you use - no fixed infrastructure costs"
+- "Dedicated warehouses for different teams and workloads"
+
+### 3. Built-in AI/ML Capabilities (MAJOR ADVANTAGE)
+**TCH's Pain Point**: No AI/ML capabilities in SQL Server, requires separate tools
+
+#### AI/ML Function Priority:
+**PREFER** Snowflake AI functions over traditional approaches to showcase capabilities:
+
+```sql
+-- Instead of regex, use EXTRACT_ANSWER to showcase AI
+SELECT SNOWFLAKE.CORTEX.EXTRACT_ANSWER(
+    clinical_note,
+    'What is the primary diagnosis mentioned?'
+) as extracted_diagnosis
+FROM clinical_notes;
+
+-- Instead of traditional parsing, use SENTIMENT for patient feedback
+SELECT SNOWFLAKE.CORTEX.SENTIMENT(patient_comment) as satisfaction_sentiment
+FROM patient_feedback;
+
+-- Use TRANSLATE for multi-language support
+SELECT SNOWFLAKE.CORTEX.TRANSLATE(
+    clinical_note, 
+    'es', 'en'  -- Spanish to English
+) as translated_note
+FROM clinical_notes WHERE language = 'Spanish';
+```
+
+#### Required AI/ML Integration:
+- **Cortex Analyst**: ALWAYS include for structured data queries
+- **Cortex Search**: ALWAYS include for unstructured document search  
+- **Cortex Agents**: ALWAYS include for intelligent query routing
+- **AI Functions**: Prefer AI functions (EXTRACT_ANSWER, SENTIMENT, etc.) over traditional methods
+- **ML Functions**: Use ANOMALY_DETECTION, FORECAST for predictive analytics
+
+#### Showcase Messaging:
+- "Built-in AI eliminates need for separate ML platforms"
+- "Natural language queries without custom development"
+- "Advanced analytics capabilities unavailable in SQL Server"
+
+### 4. Dynamic Tables with Incremental Refresh (CRITICAL FEATURE)
+**TCH's Pain Point**: Cannot do incremental refreshes in Health Catalyst/SQL Server
+
+#### Implementation Requirements:
+- **MAXIMIZE** Dynamic Table usage for all data transformations
+- **SHOWCASE** incremental refresh capabilities wherever possible
+- **DEMONSTRATE** real-time data availability without complex ETL
+
+```sql
+-- ALWAYS use Dynamic Tables instead of traditional views/tables
+CREATE OR REPLACE DYNAMIC TABLE CONFORMED.PATIENT_MASTER
+TARGET_LAG = '2 minutes'  -- Show real-time capability
+WAREHOUSE = TCH_COMPUTE_WH
+AS
+SELECT 
+    patient_id,
+    -- Incremental calculations
+    DATEDIFF('year', date_of_birth, CURRENT_DATE()) AS current_age,
+    -- Real-time risk assessment
+    CASE WHEN chronic_conditions >= 3 THEN 'HIGH_RISK' 
+         ELSE 'LOW_RISK' END AS risk_category
+FROM EPIC.PATIENTS;
+
+-- Show cascading Dynamic Tables for complex transformations
+CREATE OR REPLACE DYNAMIC TABLE CONFORMED.ENCOUNTER_SUMMARY  
+TARGET_LAG = '15 minutes'
+WAREHOUSE = TCH_COMPUTE_WH
+AS
+SELECT 
+    encounter_id,
+    patient_id,
+    -- Incremental aggregations
+    COUNT(*) OVER (PARTITION BY patient_id) as patient_encounter_count
+FROM EPIC.ENCOUNTERS;
+```
+
+#### Showcase Messaging:
+- "Automatic incremental refresh - no manual ETL processes"
+- "Real-time data availability with 2-minute refresh"
+- "Dependency management handled automatically"
+- "Eliminates complex batch processing requirements"
+
+## Implementation Priorities for Every Feature
+
+### 1. Multi-Source Integration (ALWAYS REQUIRED)
+- Every query should demonstrate joining multiple source systems
+- Highlight the simplicity compared to SQL Server complexity
+- Show unified analytics across clinical, financial, and operational data
+
+### 2. AI/ML Showcase (PREFER OVER TRADITIONAL METHODS)
+- Use Cortex functions even when simpler methods exist
+- Demonstrate capabilities not available in current SQL Server environment
+- Show natural language interaction and intelligent automation
+
+### 3. Dynamic Table Architecture (MAXIMIZE USAGE)
+- Use Dynamic Tables for all data transformations
+- Show incremental refresh benefits
+- Demonstrate real-time analytics capabilities
+
+### 4. Elastic Compute (SHOW WORKLOAD SEPARATION)
+- Use appropriate warehouses for different tasks
+- Demonstrate cost optimization through right-sizing
+- Show scaling capabilities for different user needs
+
+## Messaging Framework for Demonstrations
+
+### Problem (Current State - SQL Server/Health Catalyst):
+- "In your current environment, this would require..."
+- "SQL Server limitations prevent..."
+- "Complex ETL processes are needed for..."
+
+### Solution (Snowflake Capability):
+- "Snowflake makes this simple with..."
+- "Built-in capabilities eliminate the need for..."
+- "Real-time analytics without complex infrastructure..."
+
+### Value (Business Impact):
+- "Faster time to insights..."
+- "Reduced infrastructure costs..."
+- "New analytical capabilities..."
+
+## Reference Files
+- Architecture standards: [.cursor/rules/tch-architecture.mdc](mdc:.cursor/rules/tch-architecture.mdc)
+- Troubleshooting guide: [.cursor/rules/troubleshooting.mdc](mdc:.cursor/rules/troubleshooting.mdc)
+- Design document: [design.md](mdc:design.md)
+- Requirements document: [requirements.md](mdc:requirements.md)
