@@ -29,7 +29,8 @@ class SSEProcessor:
         """
         try:
             # Log what type of response we got
-            logger.debug(f"Processing response type: {type(response)}")
+            logger.info(f"SSEProcessor: Processing response type: {type(response)}")
+            logger.debug(f"SSEProcessor: Response sample: {str(response)[:200]}")
             
             # Check if response has content (either as attribute or dict key)
             content = None
@@ -43,10 +44,42 @@ class SSEProcessor:
             if content is not None:
                 events = []
                 
-                # Check if content is SSE format (text with data: lines)
+                # Check if content is SSE format (text with data: lines) or JSON
                 if isinstance(content, str):
+                    # First check if it looks like a Python dict/list string representation
+                    if content.startswith(("{'content':", "[{", "[\"")) or "'content':" in content[:100]:
+                        # This is a string representation of a Python dict/list, try to parse it
+                        try:
+                            import ast
+                            parsed_content = ast.literal_eval(content)
+                            if isinstance(parsed_content, dict) and 'content' in parsed_content:
+                                # Extract the actual content
+                                actual_content = parsed_content['content']
+                                if isinstance(actual_content, str):
+                                    events = json.loads(actual_content) if actual_content else []
+                                else:
+                                    events = actual_content if isinstance(actual_content, list) else []
+                            elif isinstance(parsed_content, list):
+                                events = parsed_content
+                            else:
+                                events = []
+                            logger.debug(f"Parsed {len(events)} events from Python dict string")
+                        except (ValueError, SyntaxError) as e:
+                            logger.warning(f"Failed to parse as Python dict: {e}")
+                            # Fall back to JSON parsing
+                            try:
+                                events = json.loads(content) if content else []
+                                logger.debug(f"Parsed {len(events)} events from JSON")
+                            except json.JSONDecodeError as je:
+                                logger.error(f"Failed to parse JSON: {je}")
+                                logger.debug(f"Content preview: {content[:500]}")
+                                yield {
+                                    "type": "error",
+                                    "message": f"Failed to parse response: {je}"
+                                }
+                                return
                     # Check if it's SSE format
-                    if 'data:' in content or 'event:' in content:
+                    elif 'data:' in content or 'event:' in content:
                         # Parse SSE format
                         logger.debug("Parsing SSE format response")
                         events = self._parse_sse_text(content)
