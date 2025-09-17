@@ -9,11 +9,10 @@ from typing import Dict, Generator, Optional, Any, List
 import _snowflake
 try:
     import requests
-    import sseclient
-    SSE_AVAILABLE = True
+    REQUESTS_AVAILABLE = True
 except ImportError:
-    SSE_AVAILABLE = False
-    logging.warning("requests/sseclient not available - falling back to non-streaming mode")
+    REQUESTS_AVAILABLE = False
+    logging.warning("requests not available - falling back to non-streaming mode")
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +326,7 @@ def send_message_with_streaming(
     processor = SSEProcessor()
     
     # Try to use real SSE streaming if available
-    if SSE_AVAILABLE:
+    if REQUESTS_AVAILABLE:
         sse_generator = _try_sse_streaming(api_endpoint, payload, processor, timeout)
         if sse_generator is not None:
             yield from sse_generator
@@ -371,6 +370,14 @@ def send_message_with_streaming(
         }
 
 
+def _parse_sse_line(line: str) -> tuple:
+    """Parse a single SSE line into field and value."""
+    if ':' in line:
+        field, _, value = line.partition(':')
+        return field.strip(), value.strip()
+    return None, None
+
+
 def _try_sse_streaming(
     api_endpoint: str,
     payload: Dict,
@@ -383,7 +390,7 @@ def _try_sse_streaming(
     Returns:
         Generator if successful, None if should fallback
     """
-    if not SSE_AVAILABLE:
+    if not REQUESTS_AVAILABLE:
         return None
     
     try:
@@ -418,51 +425,78 @@ def _try_sse_streaming(
         
         # Create generator function for SSE events
         def sse_event_generator():
-            # Process SSE stream
-            client = sseclient.SSEClient(response)
+            """Manually parse SSE stream without sseclient library."""
             event_count = 0
+            current_event = {}
+            current_data = []
             
-            for event in client.events():
-                event_count += 1
-                
-                if event.data == "[DONE]":
-                    logger.info(f"SSE: Stream done signal received")
-                    yield {
-                        "type": "done",
-                        "final_text": processor.current_text,
-                        "sql": processor.current_sql,
-                        "thinking_steps": processor.current_thinking,
-                        "search_results": processor.search_results
-                    }
-                    break
-                
-                try:
-                    data = json.loads(event.data)
-                    logger.debug(f"SSE: Processing event {event_count}: {event.event}")
+            # Process the streaming response line by line
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    field, value = _parse_sse_line(line)
                     
-                    # Process based on event type
-                    if event.event == "response":
-                        yield from processor._process_response_event(data)
-                    elif event.event == "error":
-                        error_data = data.get("data", {})
-                        yield {
-                            "type": "error",
-                            "message": error_data.get("message", "Unknown error"),
-                            "code": error_data.get("code", ""),
-                            "request_id": error_data.get("request_id", "")
-                        }
-                    elif event.event == "done":
-                        yield {
-                            "type": "done",
-                            "final_text": processor.current_text,
-                            "sql": processor.current_sql,
-                            "thinking_steps": processor.current_thinking,
-                            "search_results": processor.search_results
-                        }
+                    if field == 'event':
+                        current_event['event'] = value
+                    elif field == 'data':
+                        current_data.append(value)
+                    elif field == 'id':
+                        current_event['id'] = value
+                    elif field == 'retry':
+                        current_event['retry'] = value
+                else:
+                    # Empty line signals end of event
+                    if current_data:
+                        event_count += 1
+                        data_str = '\n'.join(current_data)
                         
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse SSE event data: {e}")
-                    continue
+                        if data_str == "[DONE]":
+                            logger.info(f"SSE: Stream done signal received")
+                            yield {
+                                "type": "done",
+                                "final_text": processor.current_text,
+                                "sql": processor.current_sql,
+                                "thinking_steps": processor.current_thinking,
+                                "search_results": processor.search_results
+                            }
+                            break
+                        
+                        try:
+                            data = json.loads(data_str)
+                            event_type = current_event.get('event', 'message')
+                            logger.debug(f"SSE: Processing event {event_count}: {event_type}")
+                            
+                            # Process based on event type
+                            if event_type == "response":
+                                yield from processor._process_response_event(data)
+                            elif event_type == "error":
+                                error_data = data.get("data", {})
+                                yield {
+                                    "type": "error",
+                                    "message": error_data.get("message", "Unknown error"),
+                                    "code": error_data.get("code", ""),
+                                    "request_id": error_data.get("request_id", "")
+                                }
+                            elif event_type == "done":
+                                yield {
+                                    "type": "done",
+                                    "final_text": processor.current_text,
+                                    "sql": processor.current_sql,
+                                    "thinking_steps": processor.current_thinking,
+                                    "search_results": processor.search_results
+                                }
+                            else:
+                                # Handle generic message events
+                                if 'content' in data:
+                                    yield from processor._process_response_event({'data': data})
+                                
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse SSE event data: {e}")
+                            logger.debug(f"Data was: {data_str}")
+                        
+                        # Reset for next event
+                        current_event = {}
+                        current_data = []
             
             logger.info(f"SSE: Real streaming completed with {event_count} events")
         
@@ -470,4 +504,6 @@ def _try_sse_streaming(
         
     except Exception as e:
         logger.error(f"SSE streaming error: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return None
