@@ -10,3 +10,4 @@ dependencies:
   - numpy
   - python-dateutil
   - requests
+  - sseclient-py
