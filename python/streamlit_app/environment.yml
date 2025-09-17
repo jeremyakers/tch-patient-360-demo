@@ -9,3 +9,5 @@ dependencies:
   - pandas
   - numpy
   - python-dateutil
+  - requests
+  - sseclient-py

@@ -5,9 +5,15 @@ Processes streaming responses in real-time for UI updates.
 
 import json
 import logging
-import time
 from typing import Dict, Generator, Optional, Any, List
 import _snowflake
+try:
+    import requests
+    import sseclient
+    SSE_AVAILABLE = True
+except ImportError:
+    SSE_AVAILABLE = False
+    logging.warning("requests/sseclient not available - falling back to non-streaming mode")
 
 logger = logging.getLogger(__name__)
 
@@ -305,10 +311,10 @@ def send_message_with_streaming(
     timeout: int = 60000
 ) -> Generator[Dict, None, None]:
     """
-    Send message to Cortex Agents API and yield events one by one.
+    Send message to Cortex Agents API and yield SSE events in real-time.
     
-    Since _snowflake.send_snow_api_request doesn't support true SSE streaming,
-    we get the complete response and yield events one by one to simulate streaming.
+    Uses requests library for true SSE streaming when available,
+    falls back to _snowflake.send_snow_api_request otherwise.
     
     Args:
         api_endpoint: The API endpoint URL
@@ -320,8 +326,16 @@ def send_message_with_streaming(
     """
     processor = SSEProcessor()
     
+    # Try to use real SSE streaming if available
+    if SSE_AVAILABLE:
+        sse_generator = _try_sse_streaming(api_endpoint, payload, processor, timeout)
+        if sse_generator is not None:
+            yield from sse_generator
+            return
+    
+    # Fallback to non-streaming mode
     try:
-        # Make the API call with stream: true in payload
+        logger.info(f"SSE: Using fallback mode (non-streaming)")
         logger.info(f"SSE: Sending request to: {api_endpoint}")
         logger.debug(f"SSE: Payload has stream={payload.get('stream', False)}")
         
@@ -337,30 +351,13 @@ def send_message_with_streaming(
         
         logger.info(f"SSE: Received response, type: {type(response)}")
         
-        # Process the complete response and yield events one by one
-        # This simulates streaming for the UI
+        # Process the complete response and yield events
         event_count = 0
-        
-        # Collect all events first
-        all_events = list(processor.process_sse_stream(response))
-        logger.info(f"SSE: Processed {len(all_events)} events from response")
-        
-        # Yield events one by one with small delays for UI updates
-        for event in all_events:
+        for event in processor.process_sse_stream(response):
             event_count += 1
             event_type = event.get('type')
             logger.debug(f"SSE: Yielding event {event_count}: {event_type}")
-            
-            # Yield the event
             yield event
-            
-            # Small delay between events to allow UI to update
-            # This creates the "live" effect even though we have all data
-            if event_type in ['thinking', 'tool_use']:
-                time.sleep(0.05)  # 50ms delay for thinking/tool events
-            elif event_type in ['sql', 'search_results']:
-                time.sleep(0.02)  # 20ms delay for results
-            # No delay for final response or errors
         
         logger.info(f"SSE: Stream completed with {event_count} events")
         
@@ -372,3 +369,105 @@ def send_message_with_streaming(
             "type": "error",
             "message": str(e)
         }
+
+
+def _try_sse_streaming(
+    api_endpoint: str,
+    payload: Dict,
+    processor: SSEProcessor,
+    timeout: int
+) -> Optional[Generator[Dict, None, None]]:
+    """
+    Attempt to use real SSE streaming with requests library.
+    
+    Returns:
+        Generator if successful, None if should fallback
+    """
+    if not SSE_AVAILABLE:
+        return None
+    
+    try:
+        # Get session token from Snowflake context
+        import snowflake.snowpark.context as context
+        session_token = context.get_active_session().get_session_token()
+        
+        # Build full URL (api_endpoint is relative)
+        account_url = context.get_active_session().get_current_account_url()
+        full_url = f"https://{account_url}{api_endpoint}"
+        
+        logger.info(f"SSE: Attempting real streaming to: {full_url}")
+        
+        # Make streaming request
+        headers = {
+            "Authorization": f"Snowflake Token=\"{session_token}\"",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream"
+        }
+        
+        response = requests.post(
+            full_url,
+            json=payload,
+            headers=headers,
+            stream=True,
+            timeout=timeout/1000  # Convert ms to seconds
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"SSE streaming failed: {response.status_code} - {response.text}")
+            return None
+        
+        # Create generator function for SSE events
+        def sse_event_generator():
+            # Process SSE stream
+            client = sseclient.SSEClient(response)
+            event_count = 0
+            
+            for event in client.events():
+                event_count += 1
+                
+                if event.data == "[DONE]":
+                    logger.info(f"SSE: Stream done signal received")
+                    yield {
+                        "type": "done",
+                        "final_text": processor.current_text,
+                        "sql": processor.current_sql,
+                        "thinking_steps": processor.current_thinking,
+                        "search_results": processor.search_results
+                    }
+                    break
+                
+                try:
+                    data = json.loads(event.data)
+                    logger.debug(f"SSE: Processing event {event_count}: {event.event}")
+                    
+                    # Process based on event type
+                    if event.event == "response":
+                        yield from processor._process_response_event(data)
+                    elif event.event == "error":
+                        error_data = data.get("data", {})
+                        yield {
+                            "type": "error",
+                            "message": error_data.get("message", "Unknown error"),
+                            "code": error_data.get("code", ""),
+                            "request_id": error_data.get("request_id", "")
+                        }
+                    elif event.event == "done":
+                        yield {
+                            "type": "done",
+                            "final_text": processor.current_text,
+                            "sql": processor.current_sql,
+                            "thinking_steps": processor.current_thinking,
+                            "search_results": processor.search_results
+                        }
+                        
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse SSE event data: {e}")
+                    continue
+            
+            logger.info(f"SSE: Real streaming completed with {event_count} events")
+        
+        return sse_event_generator()
+        
+    except Exception as e:
+        logger.error(f"SSE streaming error: {e}")
+        return None
