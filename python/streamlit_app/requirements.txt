@@ -13,6 +13,7 @@ streamlit>=1.49
 
 # Snowflake connectivity
 snowflake-snowpark-python
+snowflake-connector-python
 
 # Data manipulation and analysis
 pandas

@@ -6,7 +6,7 @@ Processes streaming responses in real-time for UI updates.
 import json
 import logging
 from typing import Dict, Generator, Optional, Any, List
-import _snowflake
+from utils.snowflake_api import send_snow_api_request
 try:
     import requests
     import sseclient
@@ -339,7 +339,7 @@ def send_message_with_streaming(
         logger.info(f"SSE: Sending request to: {api_endpoint}")
         logger.debug(f"SSE: Payload has stream={payload.get('stream', False)}")
         
-        response = _snowflake.send_snow_api_request(
+        response = send_snow_api_request(
             "POST",
             api_endpoint,
             {"Content-Type": "application/json"},
@@ -388,11 +388,12 @@ def _try_sse_streaming(
     
     try:
         # Get session token from Snowflake context
-        import snowflake.snowpark.context as context
-        session_token = context.get_active_session().get_session_token()
+        from utils.snowflake_api import get_current_session
+        session = get_current_session()
+        session_token = session.get_session_token()
         
         # Build full URL (api_endpoint is relative)
-        account_url = context.get_active_session().get_current_account_url()
+        account_url = session.get_current_account_url()
         full_url = f"https://{account_url}{api_endpoint}"
         
         logger.info(f"SSE: Attempting real streaming to: {full_url}")

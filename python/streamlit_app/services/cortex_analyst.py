@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Any, Tuple
 import logging
 import json
 from datetime import datetime
-import _snowflake
+from utils.snowflake_api import send_snow_api_request
 
 from services.session_manager import SessionManager
 
@@ -99,7 +99,7 @@ class CortexAnalystService:
                 "semantic_model_file": self.semantic_model_file,
                 "stream": bool(stream)
             }
-            response = _snowflake.send_snow_api_request(
+            response = send_snow_api_request(
                 "POST",
                 self.api_endpoint,
                 {"Content-Type": "application/json"},

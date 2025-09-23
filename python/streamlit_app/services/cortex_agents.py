@@ -13,8 +13,8 @@ Example: https://raw.githubusercontent.com/Snowflake-Labs/sfguide-getting-starte
 import json
 import logging
 from typing import Dict, List, Tuple, Optional, Any
-import _snowflake
-from snowflake.snowpark.context import get_active_session
+from utils.snowflake_api import send_snow_api_request
+# Snowpark session will be accessed via utils.snowflake_api
 from .cortex_agents_parser import parse_v2_agent_response
 try:
     import streamlit as st
@@ -78,7 +78,7 @@ class CortexAgentsService:
         """
         # 1) List agents in scope and check for presence (per docs: GET /databases/{db}/schemas/{schema}/agents)
         list_endpoint = self.agents_admin_endpoint
-        list_resp = _snowflake.send_snow_api_request(
+        list_resp = send_snow_api_request(
             "GET",
             list_endpoint,
             {"Content-Type": "application/json"},
@@ -146,7 +146,7 @@ class CortexAgentsService:
                 "display_name": "TCH Patient 360 Assistant"
             }
         }
-        create_resp = _snowflake.send_snow_api_request(
+        create_resp = send_snow_api_request(
             "POST",
             self.agents_admin_endpoint,
             {"Content-Type": "application/json"},
@@ -158,7 +158,7 @@ class CortexAgentsService:
         # Require explicit status for create; if missing, verify via LIST and surface full context on failure
         if not hasattr(create_resp, 'status'):
             # Verify existence immediately
-            verify_resp = _snowflake.send_snow_api_request(
+            verify_resp = send_snow_api_request(
                 "GET",
                 list_endpoint,
                 {"Content-Type": "application/json"},
@@ -190,7 +190,7 @@ class CortexAgentsService:
             raise RuntimeError(f"Agent CREATE failed ({cstatus} {creason}) @ {self.agents_admin_endpoint}: {str(ccontent)[:500]}")
 
         # Re-list to verify existence
-        verify_resp = _snowflake.send_snow_api_request(
+        verify_resp = send_snow_api_request(
             "GET",
             list_endpoint,
             {"Content-Type": "application/json"},
@@ -213,7 +213,7 @@ class CortexAgentsService:
     def create_thread(self) -> Optional[str]:
         """Create a new Cortex thread and return thread_id."""
         try:
-            resp = _snowflake.send_snow_api_request(
+            resp = send_snow_api_request(
                 "POST",
                 self.threads_endpoint,
                 {"Content-Type": "application/json"},
@@ -240,7 +240,7 @@ class CortexAgentsService:
             return False
         try:
             endpoint = f"{self.threads_endpoint}/{thread_id}"
-            resp = _snowflake.send_snow_api_request(
+            resp = send_snow_api_request(
                 "DELETE",
                 endpoint,
                 {"Content-Type": "application/json"},
@@ -487,7 +487,7 @@ Always provide context about the data timeframe and any limitations of your anal
 
             logger.info("AGENTS DEBUG: About to call _snowflake.send_snow_api_request")
             
-            response = _snowflake.send_snow_api_request(
+            response = send_snow_api_request(
                 "POST",                              # method
                 self.api_endpoint,                   # endpoint 
                 {"Content-Type": "application/json"}, # headers
@@ -950,7 +950,7 @@ RESPONSE FORMAT:
             logger.info(f"Document search payload: {json.dumps(payload, indent=2)}")
             
             # Make the API call
-            response = _snowflake.send_snow_api_request(
+            response = send_snow_api_request(
                 "POST",
                 self.api_endpoint,
                 {"Content-Type": "application/json"},
