@@ -29,7 +29,12 @@ class CortexAgentsService:
     
     def __init__(self):
         """Initialize the Cortex Agents service."""
-        self.session = get_active_session()
+        try:
+            from utils.snowflake_api import get_current_session
+            self.session = get_current_session()
+        except Exception as e:
+            logger.warning(f"Could not get session during init: {e}")
+            self.session = None
         # Build full API endpoint URL
         # Note: In SiS, we use the relative path, the base URL is handled by _snowflake module
         # Use the persisted agent endpoint for v2 API with multi-step reasoning

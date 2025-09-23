@@ -6,7 +6,7 @@ Implements enterprise-grade session management with connection pooling and cachi
 """
 
 import streamlit as st
-from snowflake.snowpark.context import get_active_session
+from utils.snowflake_api import get_current_session, is_spcs_runtime
 from snowflake.snowpark import Session
 from typing import Dict, Any, Optional
 import logging
@@ -32,7 +32,7 @@ class SessionManager:
         """Initialize all required services for the application"""
         try:
             # Get active Snowflake session
-            self.session = get_active_session()
+            self.session = get_current_session()
             
             # Test connection
             self._test_connection()
@@ -53,7 +53,7 @@ class SessionManager:
         """Get the active Snowflake session"""
         if self.session is None:
             try:
-                self.session = get_active_session()
+                self.session = get_current_session()
             except Exception as e:
                 logger.error(f"Failed to get active session: {str(e)}")
                 return None
