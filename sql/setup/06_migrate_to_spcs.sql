@@ -13,7 +13,7 @@
 
 USE ROLE TCH_PATIENT_360_ROLE;
 USE DATABASE TCH_PATIENT_360_POC;
-USE SCHEMA AI_ML;
+USE SCHEMA PRESENTATION;
 
 -- =====================================================
 -- Step 1: Check Current Streamlit App Status
@@ -21,8 +21,7 @@ USE SCHEMA AI_ML;
 SHOW STREAMLITS;
 
 -- Describe current app configuration
--- (Replace with actual app name if different)
--- DESCRIBE STREAMLIT TCH_PATIENT_360_APP;
+DESCRIBE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP;
 
 -- =====================================================
 -- Step 2: Migrate to SPCS Container Runtime
@@ -30,7 +29,7 @@ SHOW STREAMLITS;
 -- This ALTER command migrates the app to container runtime
 -- The app will take a couple minutes to reboot and build the container
 
-ALTER STREAMLIT TCH_PATIENT_360_APP
+ALTER STREAMLIT PRESENTATION.TCH_PATIENT_360_APP
   SET RUNTIME_NAME = 'SYSTEM$ST_CONTAINER_RUNTIME_PY3_11'
       COMPUTE_POOL = tch_streamlit_compute_pool
       EXTERNAL_ACCESS_INTEGRATIONS = (pypi_access_integration);
@@ -39,7 +38,7 @@ ALTER STREAMLIT TCH_PATIENT_360_APP
 -- Step 3: Verify Migration
 -- =====================================================
 -- Check the updated configuration
-DESCRIBE STREAMLIT TCH_PATIENT_360_APP;
+DESCRIBE STREAMLIT PRESENTATION.TCH_PATIENT_360_APP;
 
 -- Show compute pool status
 SHOW COMPUTE POOLS;
@@ -58,7 +57,7 @@ SELECT 'Migration Complete' AS status,
 -- TROUBLESHOOTING NOTES
 -- =====================================================
 -- If migration fails, you can revert using:
--- ALTER STREAMLIT TCH_PATIENT_360_APP SET RUNTIME_NAME = 'SYSTEM$WAREHOUSE_RUNTIME';
+-- ALTER STREAMLIT PRESENTATION.TCH_PATIENT_360_APP SET RUNTIME_NAME = 'SYSTEM$WAREHOUSE_RUNTIME';
 --
 -- Common issues:
 -- 1. Insufficient privileges - check grants in step 4 of setup script
