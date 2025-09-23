@@ -126,6 +126,13 @@ SET stmt = 'COPY FILES INTO @TCH_PATIENT_360_POC.AI_ML.SEMANTIC_MODEL_STAGE '
 EXECUTE IMMEDIATE $stmt;
 
 -------------------------------------------------------------------------------
+-- SPCS Setup for Streamlit (enables SSE streaming)
+-------------------------------------------------------------------------------
+
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/05_spcs_streamlit_setup.sql''';
+EXECUTE IMMEDIATE $stmt;
+
+-------------------------------------------------------------------------------
 -- Streamlit app creation directly from Git repo object (no manual staging)
 -------------------------------------------------------------------------------
 
@@ -144,6 +151,7 @@ SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/99_verificati
 EXECUTE IMMEDIATE $stmt;
 
 SELECT 'Orchestration completed.' AS status,
-       $data_size AS data_size;
+       $data_size AS data_size,
+       'Run sql/setup/06_migrate_to_spcs.sql to enable SSE streaming' AS next_step;
 
 

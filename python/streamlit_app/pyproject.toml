@@ -1,0 +1,37 @@
+[project]
+name = "tch-patient-360"
+version = "0.1.0"
+description = "Texas Children's Hospital Patient 360 PoC - Streamlit Application"
+requires-python = ">=3.11"
+
+# Python dependencies for SPCS runtime
+# Note: If requirements.txt exists, it takes precedence over this dependencies list
+dependencies = [
+    "streamlit>=1.49",
+    "snowflake-snowpark-python", 
+    "pandas",
+    "numpy",
+    "python-dateutil",
+    "requests",
+    "sseclient-py"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black", 
+    "flake8"
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*"]
+
+# Streamlit configuration
+[tool.streamlit]
+# This section can contain Streamlit-specific configuration
+# Currently no special config needed for SPCS runtime

@@ -1,14 +1,30 @@
-# TCH Patient 360 PoC - Streamlit Application Requirements
-# Optimized for Streamlit in Snowflake (SiS) deployment
+# TCH Patient 360 PoC - Python Dependencies for SPCS Runtime
+# ============================================================
+# This file manages Python dependencies for Streamlit in Snowflake
+# running on Snowpark Container Services (SPCS)
+#
+# Key Requirements:
+# - streamlit>=1.49 (required for SPCS support)  
+# - requests and sseclient-py (for real SSE streaming)
+# - Standard data science packages for the application
 
-# Core Streamlit and Snowflake (required for SiS)
-# Note: streamlit is provided by SiS environment
-snowflake-snowpark-python>=1.11.0
-snowflake>=1.7.0
+# Streamlit (minimum version required for SPCS)
+streamlit>=1.49
 
-# Essential Data Processing (available in SiS)
-pandas>=2.0.0
-numpy>=1.24.0
+# Snowflake connectivity
+snowflake-snowpark-python
 
-# Date/Time handling (lightweight, commonly available)
-python-dateutil>=2.8.2
+# Data manipulation and analysis
+pandas
+numpy
+
+# Utilities
+python-dateutil
+
+# HTTP requests and SSE streaming (now supported in SPCS!)
+requests
+sseclient-py
+
+# Optional: Streamlit components for enhanced UI
+# streamlit-aggrid
+# plotly
