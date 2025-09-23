@@ -387,93 +387,11 @@ def _try_sse_streaming(
         return None
     
     try:
-        # Get session token from Snowflake context
-        from utils.snowflake_api import get_current_session
-        session = get_current_session()
-        session_token = session.get_session_token()
-        
-        # Build full URL (api_endpoint is relative)
-        account_url = session.get_current_account_url()
-        full_url = f"https://{account_url}{api_endpoint}"
-        
-        logger.info(f"SSE: Attempting real streaming to: {full_url}")
-        
-        # Make streaming request
-        headers = {
-            "Authorization": f"Snowflake Token=\"{session_token}\"",
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream"
-        }
-        
-        response = requests.post(
-            full_url,
-            json=payload,
-            headers=headers,
-            stream=True,
-            timeout=timeout/1000  # Convert ms to seconds
-        )
-        
-        if response.status_code != 200:
-            logger.error(f"SSE streaming failed: {response.status_code} - {response.text}")
-            return None
-        
-        # Create generator function for SSE events
-        def sse_event_generator():
-            """Process SSE stream using sseclient library."""
-            client = sseclient.SSEClient(response)
-            event_count = 0
-            
-            for event in client.events():
-                event_count += 1
-                
-                if event.data == "[DONE]":
-                    logger.info(f"SSE: Stream done signal received")
-                    yield {
-                        "type": "done",
-                        "final_text": processor.current_text,
-                        "sql": processor.current_sql,
-                        "thinking_steps": processor.current_thinking,
-                        "search_results": processor.search_results
-                    }
-                    break
-                
-                try:
-                    data = json.loads(event.data)
-                    event_type = event.event or 'message'
-                    logger.debug(f"SSE: Processing event {event_count}: {event_type}")
-                    
-                    # Process based on event type
-                    if event_type == "response":
-                        yield from processor._process_response_event(data)
-                    elif event_type == "error":
-                        error_data = data.get("data", {})
-                        yield {
-                            "type": "error",
-                            "message": error_data.get("message", "Unknown error"),
-                            "code": error_data.get("code", ""),
-                            "request_id": error_data.get("request_id", "")
-                        }
-                    elif event_type == "done":
-                        yield {
-                            "type": "done",
-                            "final_text": processor.current_text,
-                            "sql": processor.current_sql,
-                            "thinking_steps": processor.current_thinking,
-                            "search_results": processor.search_results
-                        }
-                    else:
-                        # Handle generic message events
-                        if 'content' in data:
-                            yield from processor._process_response_event({'data': data})
-                            
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse SSE event data: {e}")
-                    logger.debug(f"Data was: {event.data}")
-                    continue
-            
-            logger.info(f"SSE: Real streaming completed with {event_count} events")
-        
-        return sse_event_generator()
+        # In SPCS, we can't make external REST API calls
+        # The requests approach won't work because we don't have session tokens
+        logger.warning("SSE streaming not supported in SPCS container runtime")
+        logger.warning("External REST API calls are not available in SPCS")
+        return None
         
     except Exception as e:
         logger.error(f"SSE streaming error: {e}")
