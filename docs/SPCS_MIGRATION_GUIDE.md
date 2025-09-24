@@ -37,16 +37,18 @@ The deploying role needs:
 
 ### 1. **Setup SPCS Infrastructure**
 
-Run the SPCS setup script:
+Run the SPCS setup scripts:
 ```sql
 -- This is automatically included in sql/00_master.sql
 !source sql/setup/05_spcs_streamlit_setup.sql
+!source sql/setup/07_setup_keypair_secret.sql
 ```
 
 This creates:
 - **Compute Pool**: `tch_streamlit_compute_pool` (1-2 nodes, CPU_X64_XS)
 - **Network Rule**: `pypi_network_rule` (allows PyPI access)
 - **External Access Integration**: `pypi_access_integration`
+- **Keypair Secret**: Secure storage for JWT authentication private key
 - **Privilege Grants**: Required permissions for `TCH_PATIENT_360_ROLE`
 
 ### 2. **Update Package Management**
@@ -83,7 +85,41 @@ dependencies = [
 
 **Note**: `requirements.txt` takes precedence over `pyproject.toml` dependencies.
 
-### 3. **Deploy Updated Application**
+### 3. **Setup Private Key Secret (REQUIRED for SPCS)**
+
+**CRITICAL**: Before deploying, you must set up the private key secret for JWT authentication:
+
+#### **Step 3a: Read the Private Key**
+```bash
+cat keypair/rsa_key.p8
+```
+Copy the entire output (including `-----BEGIN/END-----` lines).
+
+#### **Step 3b: Create the Secret**
+```sql
+-- Run as ACCOUNTADMIN
+USE ROLE ACCOUNTADMIN;
+USE DATABASE TCH_PATIENT_360_POC;
+
+-- Replace <PRIVATE_KEY_CONTENT> with the actual key content from step 3a
+CREATE OR REPLACE SECRET keypair_secret
+TYPE = GENERIC_STRING
+SECRET_STRING = '<PRIVATE_KEY_CONTENT>';
+
+-- Grant access to the application role
+GRANT READ ON SECRET keypair_secret TO ROLE TCH_PATIENT_360_ROLE;
+```
+
+#### **Step 3c: Test Secret Access**
+```sql
+-- Switch to application role
+USE ROLE TCH_PATIENT_360_ROLE;
+
+-- Test reading the secret
+SELECT SYSTEM$GET_SECRET('keypair_secret') as private_key_test;
+```
+
+### 4. **Deploy Updated Application**
 
 The standard deployment process now includes SPCS setup:
 ```bash
@@ -94,8 +130,9 @@ This will:
 1. Run the SPCS setup automatically
 2. Create the Streamlit app with standard warehouse runtime initially
 3. Prepare for SPCS migration
+4. **Note**: The keypair secret must be created manually before deployment
 
-### 4. **Migrate to SPCS Runtime**
+### 5. **Migrate to SPCS Runtime**
 
 After deployment completes, run the migration script:
 ```sql
@@ -110,7 +147,7 @@ After deployment completes, run the migration script:
 5. Enable "External networks" → Select `pypi_access_integration`
 6. Click "Save"
 
-### 5. **Verify Migration**
+### 6. **Verify Migration**
 
 Check that the app is running on SPCS:
 ```sql

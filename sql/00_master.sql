@@ -132,6 +132,10 @@ EXECUTE IMMEDIATE $stmt;
 SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/05_spcs_streamlit_setup.sql''';
 EXECUTE IMMEDIATE $stmt;
 
+-- Keypair secret setup (required for SPCS JWT authentication)
+SET stmt = 'EXECUTE IMMEDIATE FROM ''' || $workspace_root || '/sql/setup/07_setup_keypair_secret.sql''';
+EXECUTE IMMEDIATE $stmt;
+
 -------------------------------------------------------------------------------
 -- Streamlit app creation directly from Git repo object (no manual staging)
 -------------------------------------------------------------------------------
