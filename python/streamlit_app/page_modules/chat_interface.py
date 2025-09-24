@@ -13,6 +13,8 @@ import pandas as pd
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import logging
+import requests
+import os
 
 from services import cortex_agents, data_service, session_manager
 from services.cortex_agents_sse import send_message_with_streaming
@@ -24,11 +26,74 @@ def render():
     """Entry point called by main.py"""
     render_chat_interface()
 
+def test_oauth_api_call():
+    """Test OAuth token authentication with a simple Snowflake REST API call"""
+    try:
+        # Read OAuth token from the file provided by Snowflake
+        token_path = "/snowflake/session/token"
+        with open(token_path, 'r') as token_file:
+            oauth_token = token_file.read().strip()
+        
+        # Get host information from environment variable
+        snowflake_host = os.getenv('SNOWFLAKE_HOST')
+        if not snowflake_host:
+            st.error("SNOWFLAKE_HOST environment variable not set")
+            return
+        
+        # Test with a simple endpoint - list databases
+        test_endpoint = "/api/v2/databases"
+        full_url = f"https://{snowflake_host}{test_endpoint}"
+        
+        # Set up headers as per documentation
+        headers = {
+            "Authorization": f"Bearer {oauth_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        # Log the request details
+        logger.info(f"TEST OAuth API Call:")
+        logger.info(f"  URL: {full_url}")
+        logger.info(f"  Headers: Authorization=Bearer <token>, Content-Type=application/json")
+        logger.info(f"  Token length: {len(oauth_token)}")
+        logger.info(f"  Token preview: {oauth_token[:20]}...")
+        
+        # Make the request
+        response = requests.get(full_url, headers=headers, timeout=10)
+        
+        # Log the response
+        logger.info(f"TEST Response:")
+        logger.info(f"  Status Code: {response.status_code}")
+        logger.info(f"  Headers: {dict(response.headers)}")
+        logger.info(f"  Response Text (first 500 chars): {response.text[:500]}")
+        
+        # Display results in UI
+        st.success(f"✅ OAuth Test: Status {response.status_code}")
+        if response.status_code == 200:
+            st.json(response.json())
+        else:
+            st.error(f"Response: {response.text}")
+            
+        return response.status_code == 200
+        
+    except Exception as e:
+        logger.error(f"TEST OAuth API call failed: {e}")
+        st.error(f"❌ OAuth Test Failed: {e}")
+        return False
+
 def render_chat_interface():
     """Main entry point for the AI chat interface page"""
     
     st.title("🤖 AI Healthcare Assistant")
     st.markdown("Ask questions about patients, cohorts, or clinical data using natural language")
+    
+    # Add test button in sidebar
+    with st.sidebar:
+        st.subheader("🧪 Testing")
+        if st.button("Test OAuth API Call"):
+            test_oauth_api_call()
+        
+        st.markdown("---")
     
     # Sidebar for new conversation and examples
     with st.sidebar:

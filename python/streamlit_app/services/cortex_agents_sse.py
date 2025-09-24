@@ -395,7 +395,13 @@ def _try_sse_streaming(
         return None
     
     try:
-        # Use the built-in OAuth token and environment variables provided by Snowflake in SPCS
+        # Use the same authentication approach as the working non-streaming calls
+        from utils.snowflake_api import send_snow_api_request
+        
+        logger.info("SSE: Using same authentication as working non-streaming calls")
+        
+        # Make the request using the same method that works for non-streaming
+        # but with stream=True parameter
         import os
         
         # Read OAuth token from the file provided by Snowflake
@@ -407,12 +413,12 @@ def _try_sse_streaming(
         except Exception as e:
             raise RuntimeError(f"Cannot read Snowflake OAuth token from {token_path}: {e}")
         
-        # Get host information from environment variable
+        # Get host information from environment variable (same as working calls)
         snowflake_host = os.getenv('SNOWFLAKE_HOST')
         if not snowflake_host:
             raise RuntimeError("SNOWFLAKE_HOST environment variable not set by Snowflake")
         
-        # Build full URL using the Snowflake-provided host
+        # Build full URL using the same method as working calls
         full_url = f"https://{snowflake_host}{api_endpoint}"
         
         logger.info(f"SSE: Attempting real streaming to: {full_url}")
