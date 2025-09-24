@@ -327,11 +327,16 @@ def send_message_with_streaming(
     processor = SSEProcessor()
     
     # Try to use real SSE streaming if available
+    logger.info(f"SSE: SSE_AVAILABLE = {SSE_AVAILABLE}")
     if SSE_AVAILABLE:
+        logger.info("SSE: Attempting real SSE streaming")
         sse_generator = _try_sse_streaming(api_endpoint, payload, processor, timeout)
         if sse_generator is not None:
+            logger.info("SSE: Real streaming successful, yielding events")
             yield from sse_generator
             return
+        else:
+            logger.warning("SSE: Real streaming failed, falling back to non-streaming")
     
     # Fallback to non-streaming mode
     try:
@@ -353,10 +358,13 @@ def send_message_with_streaming(
         
         # Process the complete response and yield events
         event_count = 0
+        logger.info("SSE: Starting to process response and yield events")
+        
         for event in processor.process_sse_stream(response):
             event_count += 1
             event_type = event.get('type')
-            logger.debug(f"SSE: Yielding event {event_count}: {event_type}")
+            logger.info(f"SSE: Yielding event {event_count}: {event_type}")
+            logger.debug(f"SSE: Event data: {event}")
             yield event
         
         logger.info(f"SSE: Stream completed with {event_count} events")

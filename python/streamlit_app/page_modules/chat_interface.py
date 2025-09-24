@@ -528,13 +528,18 @@ def _process_user_query(query: str):
                 
                 # Stream the response
                 step_count = 0
+                event_count = 0
+                logger.info("DEBUG: Starting SSE streaming loop")
+                
                 for event in send_message_with_streaming(
                     cortex_agents.api_endpoint,
                     payload,
                     timeout=60000
                 ):
+                    event_count += 1
                     event_type = event.get("type")
-                    logger.debug(f"SSE Event: {event_type}")
+                    logger.info(f"CHAT: Received SSE event {event_count}: {event_type}")
+                    logger.debug(f"CHAT: Event data: {event}")
                     
                     if event_type == "thinking":
                         # Show thinking step in real-time
