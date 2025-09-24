@@ -464,20 +464,63 @@ def _try_sse_streaming(
                 try:
                     data = json.loads(event.data)
                     event_type = event.event or 'message'
-                    logger.debug(f"SSE: Processing event {event_count}: {event_type}")
+                    logger.info(f"SSE: Processing event {event_count}: {event_type}")
                     
-                    # Process based on event type
-                    if event_type == "response":
-                        yield from processor._process_response_event(data)
-                    elif event_type == "error":
-                        error_data = data.get("data", {})
+                    # Process based on actual Cortex Agents v2 event types
+                    if event_type == "response.thinking.delta":
+                        # Real-time thinking steps
+                        thinking_text = data.get("text", "")
+                        if thinking_text:
+                            processor.current_thinking.append(thinking_text)
+                            yield {
+                                "type": "thinking",
+                                "text": thinking_text,
+                                "step_number": len(processor.current_thinking)
+                            }
+                    
+                    elif event_type == "response.tool_use":
+                        # Tool usage events
+                        tool_name = data.get("name", "Unknown Tool")
+                        tool_input = data.get("input", {})
                         yield {
-                            "type": "error",
-                            "message": error_data.get("message", "Unknown error"),
-                            "code": error_data.get("code", ""),
-                            "request_id": error_data.get("request_id", "")
+                            "type": "tool_use",
+                            "tool_name": tool_name,
+                            "query": tool_input.get("query", "")
                         }
-                    elif event_type == "done":
+                    
+                    elif event_type == "response.tool_result":
+                        # Tool result events (may contain SQL)
+                        content_items = data.get("content", [])
+                        for content_item in content_items:
+                            if isinstance(content_item, dict) and content_item.get("type") == "json":
+                                json_data = content_item.get("json", {})
+                                if "sql" in json_data:
+                                    processor.current_sql = json_data["sql"]
+                                    yield {
+                                        "type": "sql",
+                                        "query": json_data["sql"]
+                                    }
+                                if "search_results" in json_data:
+                                    search_results = json_data["search_results"]
+                                    processor.search_results.extend(search_results)
+                                    yield {
+                                        "type": "search_results",
+                                        "count": len(search_results),
+                                        "results": search_results[:3]
+                                    }
+                    
+                    elif event_type == "response.text.delta":
+                        # Streaming text response
+                        text_delta = data.get("text", "")
+                        if text_delta:
+                            processor.current_text += text_delta
+                    
+                    elif event_type == "response.done":
+                        # Stream completion
+                        yield {
+                            "type": "response_text",
+                            "text": processor.current_text
+                        }
                         yield {
                             "type": "done",
                             "final_text": processor.current_text,
@@ -485,10 +528,20 @@ def _try_sse_streaming(
                             "thinking_steps": processor.current_thinking,
                             "search_results": processor.search_results
                         }
+                    
+                    elif event_type == "error":
+                        # Error events
+                        error_message = data.get("message", "Unknown error")
+                        error_code = data.get("code", "")
+                        yield {
+                            "type": "error",
+                            "message": error_message,
+                            "code": error_code
+                        }
+                    
                     else:
-                        # Handle generic message events
-                        if 'content' in data:
-                            yield from processor._process_response_event({'data': data})
+                        # Log unknown event types for debugging
+                        logger.debug(f"SSE: Unknown event type: {event_type}, data: {data}")
                             
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse SSE event data: {e}")
