@@ -387,41 +387,22 @@ def _try_sse_streaming(
         return None
     
     try:
-        # Get authentication from st.connection in SPCS
-        import streamlit as st
-        conn = st.connection("snowflake")
+        # Use JWT authentication for external REST API calls in SPCS
+        from utils.jwt_auth import get_snowflake_jwt_token
         
-        # Get account URL and authentication info
-        connection_info = conn._get_connection_info()
-        account = connection_info.get('account', '')
+        # Generate JWT token using the existing keypair
+        jwt_token = get_snowflake_jwt_token()
         
-        if not account:
-            raise RuntimeError("Cannot determine account URL from st.connection")
-            
-        full_url = f"https://{account}.snowflakecomputing.com{api_endpoint}"
-        
-        # Get authentication token from the connection
-        auth_token = None
-        try:
-            if hasattr(conn, '_connection'):
-                raw_conn = conn._connection
-                if hasattr(raw_conn, 'get_session_token'):
-                    auth_token = raw_conn.get_session_token()
-            elif hasattr(conn, 'raw_connection'):
-                raw_conn = conn.raw_connection
-                if hasattr(raw_conn, 'get_session_token'):
-                    auth_token = raw_conn.get_session_token()
-        except Exception as e:
-            logger.debug(f"Could not get session token: {e}")
-        
-        if not auth_token:
-            raise RuntimeError("Cannot get authentication token from st.connection in SPCS")
+        # Build full URL for the REST API call
+        account_identifier = "SFSENORTHAMERICA-DEMO_JAKERS"
+        full_url = f"https://{account_identifier.lower()}.snowflakecomputing.com{api_endpoint}"
         
         logger.info(f"SSE: Attempting real streaming to: {full_url}")
         
-        # Make streaming request with proper authentication
+        # Make streaming request with JWT authentication
         headers = {
-            "Authorization": f"Snowflake Token=\"{session_token}\"",
+            "Authorization": f"Bearer {jwt_token}",
+            "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
             "Content-Type": "application/json",
             "Accept": "text/event-stream"
         }

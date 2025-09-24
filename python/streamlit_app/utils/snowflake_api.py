@@ -96,68 +96,22 @@ def _send_spcs_api_request(
     try:
         import streamlit as st
         
-        # Get Snowflake connection details from st.connection
-        conn = st.connection("snowflake")
+        # Use JWT authentication for external REST API calls in SPCS
+        from utils.jwt_auth import get_snowflake_jwt_token
         
-        # Debug: Log the connection object structure to understand the API
-        logger.info(f"SPCS: SnowflakeConnection type: {type(conn)}")
-        logger.info(f"SPCS: SnowflakeConnection attributes: {dir(conn)}")
+        # Generate JWT token using the existing keypair
+        jwt_token = get_snowflake_jwt_token()
         
-        # Try to access the raw connection in different ways
-        raw_conn = None
-        account_url = None
-        session_token = None
+        # Build full URL for the REST API call
+        account_identifier = "SFSENORTHAMERICA-DEMO_JAKERS"
+        full_url = f"https://{account_identifier.lower()}.snowflakecomputing.com{endpoint}"
         
-        # Method 1: Try _connection attribute
-        if hasattr(conn, '_connection'):
-            raw_conn = conn._connection
-            logger.info(f"SPCS: Found _connection attribute, type: {type(raw_conn)}")
+        logger.info(f"SPCS: Making authenticated REST API call to {full_url}")
         
-        # Method 2: Try raw_connection method/property
-        elif hasattr(conn, 'raw_connection'):
-            try:
-                raw_conn = conn.raw_connection
-                logger.info(f"SPCS: Found raw_connection, type: {type(raw_conn)}")
-            except Exception as e:
-                logger.debug(f"raw_connection failed: {e}")
-        
-        # Method 3: Try _instance attribute
-        elif hasattr(conn, '_instance'):
-            instance = conn._instance
-            logger.info(f"SPCS: Found _instance, type: {type(instance)}")
-            if hasattr(instance, '_connection'):
-                raw_conn = instance._connection
-                logger.info(f"SPCS: Found _instance._connection, type: {type(raw_conn)}")
-        
-        if not raw_conn:
-            logger.error(f"SPCS: Cannot access underlying connection. Available attributes: {[attr for attr in dir(conn) if not attr.startswith('__')]}")
-            raise RuntimeError("Cannot access underlying Snowflake connection from st.connection")
-        
-        # Try to get account URL and session token
-        try:
-            if hasattr(raw_conn, 'host'):
-                account_url = raw_conn.host
-            elif hasattr(raw_conn, 'account'):
-                account_url = f"{raw_conn.account}.snowflakecomputing.com"
-            
-            if hasattr(raw_conn, 'get_session_token'):
-                session_token = raw_conn.get_session_token()
-            elif hasattr(raw_conn, 'session_token'):
-                session_token = raw_conn.session_token
-                
-        except Exception as e:
-            logger.error(f"Failed to get connection details: {e}")
-            logger.error(f"Raw connection attributes: {[attr for attr in dir(raw_conn) if not attr.startswith('__')]}")
-            raise RuntimeError(f"Cannot extract connection details: {e}")
-        
-        if not account_url or not session_token:
-            raise RuntimeError(f"Missing connection details - account_url: {bool(account_url)}, session_token: {bool(session_token)}")
-        
-        full_url = f"https://{account_url}{endpoint}"
-        
-        # Set up proper authentication headers
+        # Set up proper authentication headers using JWT
         auth_headers = {
-            "Authorization": f"Snowflake Token=\"{session_token}\"",
+            "Authorization": f"Bearer {jwt_token}",
+            "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
             "Content-Type": "application/json"
         }
         
