@@ -21,28 +21,8 @@ Before running the deployment, an ACCOUNTADMIN must execute:
 GRANT ROLE TCH_PATIENT_360_ROLE TO USER <your_username>;
 ```
 
-### 3. SPCS Keypair Secret Setup (REQUIRED for SSE Streaming)
-**CRITICAL for SPCS container runtime**: Set up the private key secret for JWT authentication:
-
-1. **Read the private key content:**
-   ```bash
-   cat keypair/rsa_key.p8
-   ```
-
-2. **Create Snowflake secret:**
-   ```sql
-   USE ROLE ACCOUNTADMIN;
-   USE DATABASE TCH_PATIENT_360_POC;
-   
-   -- Replace <PRIVATE_KEY_CONTENT> with actual key content
-   CREATE OR REPLACE SECRET keypair_secret
-   TYPE = GENERIC_STRING
-   SECRET_STRING = '<PRIVATE_KEY_CONTENT>';
-   
-   GRANT READ ON SECRET keypair_secret TO ROLE TCH_PATIENT_360_ROLE;
-   ```
-
-**ℹ️ This is integrated into the main setup process**
+### 3. SPCS Authentication (Automatic)
+**Good news**: SPCS automatically provides OAuth tokens for Snowflake authentication. No manual keypair setup required!
 
 ## 🚀 Quick Start
 

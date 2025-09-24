@@ -59,13 +59,8 @@ GRANT OWNERSHIP ON WAREHOUSE TCH_COMPUTE_WH TO ROLE TCH_PATIENT_360_ROLE;
 GRANT OWNERSHIP ON WAREHOUSE TCH_ANALYTICS_WH TO ROLE TCH_PATIENT_360_ROLE;
 GRANT OWNERSHIP ON WAREHOUSE TCH_AI_ML_WH TO ROLE TCH_PATIENT_360_ROLE;
 
--- CRITICAL: Setup private key secret for real-time AI streaming
--- Replace <PRIVATE_KEY_CONTENT> with content from: cat keypair/rsa_key.p8
-CREATE OR REPLACE SECRET keypair_secret
-TYPE = GENERIC_STRING  
-SECRET_STRING = '<PRIVATE_KEY_CONTENT>';
-
-GRANT READ ON SECRET keypair_secret TO ROLE TCH_PATIENT_360_ROLE;
+-- Note: SPCS automatically provides OAuth tokens for authentication
+-- No manual keypair setup required!
 
 -- Create compute pool for data generation Notebooks
 CREATE COMPUTE POOL IF NOT EXISTS TCH_PATIENT_360_POOL

@@ -387,22 +387,32 @@ def _try_sse_streaming(
         return None
     
     try:
-        # Use JWT authentication for external REST API calls in SPCS
-        from utils.jwt_auth import get_snowflake_jwt_token
+        # Use the built-in OAuth token and environment variables provided by Snowflake in SPCS
+        import os
         
-        # Generate JWT token using the existing keypair
-        jwt_token = get_snowflake_jwt_token()
+        # Read OAuth token from the file provided by Snowflake
+        token_path = "/snowflake/session/token"
+        try:
+            with open(token_path, 'r') as token_file:
+                oauth_token = token_file.read().strip()
+            logger.info("SSE: Successfully read OAuth token from Snowflake")
+        except Exception as e:
+            raise RuntimeError(f"Cannot read Snowflake OAuth token from {token_path}: {e}")
         
-        # Build full URL for the REST API call
-        account_identifier = "SFSENORTHAMERICA-DEMO_JAKERS"
-        full_url = f"https://{account_identifier.lower()}.snowflakecomputing.com{api_endpoint}"
+        # Get host information from environment variable
+        snowflake_host = os.getenv('SNOWFLAKE_HOST')
+        if not snowflake_host:
+            raise RuntimeError("SNOWFLAKE_HOST environment variable not set by Snowflake")
+        
+        # Build full URL using the Snowflake-provided host
+        full_url = f"https://{snowflake_host}{api_endpoint}"
         
         logger.info(f"SSE: Attempting real streaming to: {full_url}")
         
-        # Make streaming request with JWT authentication
+        # Make streaming request with OAuth authentication
         headers = {
-            "Authorization": f"Bearer {jwt_token}",
-            "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
+            "Authorization": f"Bearer {oauth_token}",
+            "X-Snowflake-Authorization-Token-Type": "OAUTH",
             "Content-Type": "application/json",
             "Accept": "text/event-stream"
         }

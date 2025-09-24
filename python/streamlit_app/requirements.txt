@@ -26,10 +26,6 @@ python-dateutil
 requests
 sseclient-py
 
-# JWT token generation for REST API authentication
-pyjwt
-cryptography
-
 # Optional: Streamlit components for enhanced UI
 # streamlit-aggrid
 # plotly
