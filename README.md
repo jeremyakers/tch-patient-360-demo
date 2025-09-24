@@ -1,6 +1,16 @@
 # TCH Patient 360 PoC – Snowflake Deployment Guide
 
-This repository packages the Texas Children's Hospital Patient 360 PoC for zero‑install deployment inside Snowflake.
+This repository packages the Texas Children's Hospital Patient 360 PoC for zero‑install deployment inside Snowflake using **Streamlit on Snowpark Container Services (SPCS)** with advanced real-time AI capabilities.
+
+## Prerequisites
+
+**IMPORTANT**: This PoC requires **Snowpark Container Services (SPCS)** which is currently in Private Preview. Contact your Snowflake representative to enable SPCS on your account.
+
+### Features Enabled by SPCS:
+- ✅ **Real-time SSE streaming** for Cortex Agents v2 interactions
+- ✅ **Multi-step AI reasoning** with live thinking process display
+- ✅ **Advanced tool orchestration** across Cortex Analyst and Search
+- ✅ **Latest Streamlit features** and external package support
 
 ## Quick start (Snowsight Workspaces – recommended)
 
