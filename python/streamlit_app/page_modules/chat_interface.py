@@ -87,16 +87,16 @@ def render_chat_interface():
     st.title("🤖 AI Healthcare Assistant")
     st.markdown("Ask questions about patients, cohorts, or clinical data using natural language")
     
-    # Add test button in sidebar
+    # Sidebar for testing, conversation and examples
     with st.sidebar:
+        # Testing section
         st.subheader("🧪 Testing")
         if st.button("Test OAuth API Call"):
             test_oauth_api_call()
         
         st.markdown("---")
-    
-    # Sidebar for new conversation and examples
-    with st.sidebar:
+        
+        # Conversation section
         st.subheader("💬 Conversation")
         
         if st.button("🔄 New Conversation", key="new_chat"):
