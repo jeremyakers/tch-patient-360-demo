@@ -96,36 +96,18 @@ def _send_spcs_api_request(
     try:
         import streamlit as st
         
-        # Use the built-in OAuth token and environment variables provided by Snowflake in SPCS
-        import os
+        # For external REST API calls in SPCS, we need to use proper external authentication
+        # The /snowflake/session/token is for internal database connections, not external API calls
         
-        # Read OAuth token from the file provided by Snowflake
-        token_path = "/snowflake/session/token"
-        try:
-            with open(token_path, 'r') as token_file:
-                oauth_token = token_file.read().strip()
-            logger.info("SPCS: Successfully read OAuth token from Snowflake")
-        except Exception as e:
-            raise RuntimeError(f"Cannot read Snowflake OAuth token from {token_path}: {e}")
+        logger.error("SPCS external REST API authentication not yet configured")
+        logger.error("The OAuth token from /snowflake/session/token is for database connections, not external API calls")
+        logger.error("For external Cortex API calls, we need to configure proper authentication credentials")
         
-        # Get account and host information from environment variables
-        snowflake_account = os.getenv('SNOWFLAKE_ACCOUNT')
-        snowflake_host = os.getenv('SNOWFLAKE_HOST')
-        
-        if not snowflake_host:
-            raise RuntimeError("SNOWFLAKE_HOST environment variable not set by Snowflake")
-        
-        # Build full URL using the Snowflake-provided host
-        full_url = f"https://{snowflake_host}{endpoint}"
-        
-        logger.info(f"SPCS: Making authenticated REST API call to {full_url}")
-        
-        # Set up proper authentication headers using OAuth token
-        auth_headers = {
-            "Authorization": f"Bearer {oauth_token}",
-            "X-Snowflake-Authorization-Token-Type": "OAUTH",
-            "Content-Type": "application/json"
-        }
+        raise RuntimeError(
+            "External REST API calls in SPCS require proper authentication setup. "
+            "The built-in OAuth token is for database connections only. "
+            "Need to configure PAT or keypair authentication for external API calls."
+        )
         
         # Add any additional headers
         if headers:
