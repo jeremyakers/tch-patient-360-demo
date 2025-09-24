@@ -443,8 +443,12 @@ def _try_sse_streaming(
             client = sseclient.SSEClient(response)
             event_count = 0
             
+            logger.info("SSE: Starting to process SSE events from client")
+            
             for event in client.events():
                 event_count += 1
+                logger.info(f"SSE: Raw event {event_count} - type: {event.event}, data length: {len(event.data) if event.data else 0}")
+                logger.debug(f"SSE: Raw event data: {event.data[:200]}..." if event.data and len(event.data) > 200 else f"SSE: Raw event data: {event.data}")
                 
                 if event.data == "[DONE]":
                     logger.info(f"SSE: Stream done signal received")
