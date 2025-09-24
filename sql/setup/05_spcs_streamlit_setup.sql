@@ -13,9 +13,10 @@ USE ROLE ACCOUNTADMIN;
 USE DATABASE TCH_PATIENT_360_POC;
 
 -- =====================================================
--- Step 1: Create Compute Pool for Streamlit
+-- Step 1: Create Dedicated Compute Pool for Streamlit
 -- =====================================================
--- This compute pool will run the containerized Streamlit app
+-- This compute pool is specifically for the Streamlit app (separate from data generation)
+-- CPU_X64_XS is sufficient for Streamlit UI workloads
 -- MIN_NODES = 1 ensures fast app startup
 -- MAX_NODES = 2 allows for scaling during high usage
 
@@ -23,7 +24,7 @@ CREATE OR REPLACE COMPUTE POOL tch_streamlit_compute_pool
   MIN_NODES = 1
   MAX_NODES = 2  
   INSTANCE_FAMILY = CPU_X64_XS
-  COMMENT = 'Compute pool for TCH Patient 360 Streamlit app on SPCS';
+  COMMENT = 'Dedicated compute pool for TCH Patient 360 Streamlit app on SPCS (separate from data generation)';
 
 -- =====================================================
 -- Step 2: Create Network Rule for PyPI Access

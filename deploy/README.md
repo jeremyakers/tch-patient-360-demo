@@ -42,7 +42,7 @@ GRANT ROLE TCH_PATIENT_360_ROLE TO USER <your_username>;
    GRANT READ ON SECRET keypair_secret TO ROLE TCH_PATIENT_360_ROLE;
    ```
 
-**📚 See detailed instructions**: `docs/SPCS_KEYPAIR_SETUP.md`
+**ℹ️ This is integrated into the main setup process**
 
 ## 🚀 Quick Start
 

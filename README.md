@@ -59,13 +59,30 @@ GRANT OWNERSHIP ON WAREHOUSE TCH_COMPUTE_WH TO ROLE TCH_PATIENT_360_ROLE;
 GRANT OWNERSHIP ON WAREHOUSE TCH_ANALYTICS_WH TO ROLE TCH_PATIENT_360_ROLE;
 GRANT OWNERSHIP ON WAREHOUSE TCH_AI_ML_WH TO ROLE TCH_PATIENT_360_ROLE;
 
--- Create compute pool for Notebooks on Container
+-- CRITICAL: Setup private key secret for real-time AI streaming
+-- Replace <PRIVATE_KEY_CONTENT> with content from: cat keypair/rsa_key.p8
+CREATE OR REPLACE SECRET keypair_secret
+TYPE = GENERIC_STRING  
+SECRET_STRING = '<PRIVATE_KEY_CONTENT>';
+
+GRANT READ ON SECRET keypair_secret TO ROLE TCH_PATIENT_360_ROLE;
+
+-- Create compute pool for data generation Notebooks
 CREATE COMPUTE POOL IF NOT EXISTS TCH_PATIENT_360_POOL
   MIN_NODES = 1
   MAX_NODES = 2
-  INSTANCE_FAMILY = STANDARD_1;
+  INSTANCE_FAMILY = STANDARD_1
+  COMMENT = 'Compute pool for TCH Patient 360 PoC data generation notebooks';
+
+-- Create dedicated compute pool for Streamlit app (smaller instance size)
+CREATE COMPUTE POOL IF NOT EXISTS tch_streamlit_compute_pool
+  MIN_NODES = 1
+  MAX_NODES = 2
+  INSTANCE_FAMILY = CPU_X64_XS
+  COMMENT = 'Dedicated compute pool for TCH Patient 360 Streamlit app on SPCS';
 
 GRANT USAGE ON COMPUTE POOL TCH_PATIENT_360_POOL TO ROLE TCH_PATIENT_360_ROLE;
+GRANT USAGE ON COMPUTE POOL tch_streamlit_compute_pool TO ROLE TCH_PATIENT_360_ROLE;
 
 -- External access for PyPI (used by notebook)
 CREATE OR REPLACE NETWORK RULE PIPY_RULE

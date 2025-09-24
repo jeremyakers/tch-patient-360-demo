@@ -20,24 +20,28 @@ USE DATABASE TCH_PATIENT_360_POC;
 -- To get the private key content:
 -- cat keypair/rsa_key.p8
 
--- IMPORTANT: Replace <PRIVATE_KEY_CONTENT> with the actual private key
--- Example format:
--- -----BEGIN ENCRYPTED PRIVATE KEY-----
--- MIIFHDBOBgkqhkiG9w0BBQ0wQTApBgkqhkiG9w0BBQwwHAQI...
--- -----END ENCRYPTED PRIVATE KEY-----
+-- NOTE: The private key content should be provided via the main README setup
+-- This script provides a template for the secret creation
 
+-- Template for secret creation (to be executed manually):
 /*
 CREATE OR REPLACE SECRET keypair_secret
 TYPE = GENERIC_STRING
 SECRET_STRING = '<PRIVATE_KEY_CONTENT>';
-*/
 
--- =====================================================
--- Step 2: Grant Access to TCH Role
--- =====================================================
-/*
 GRANT READ ON SECRET keypair_secret TO ROLE TCH_PATIENT_360_ROLE;
 */
+
+-- Check if secret already exists
+SELECT 'Checking for existing keypair secret...' as status;
+
+-- Try to access the secret (will fail if not created)
+SELECT 
+    CASE 
+        WHEN SYSTEM$GET_SECRET('keypair_secret') IS NOT NULL 
+        THEN 'Keypair secret exists and is accessible'
+        ELSE 'Keypair secret not found'
+    END as secret_status;
 
 -- =====================================================
 -- Step 3: Test Secret Access
