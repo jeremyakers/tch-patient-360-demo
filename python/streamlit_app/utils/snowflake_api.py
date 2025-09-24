@@ -86,132 +86,77 @@ def _send_spcs_api_request(
     timeout: int = 60000
 ) -> Any:
     """
-    Send API request using SPCS environment.
+    Send API request using SPCS environment with proper authentication.
     
-    In SPCS, we need to use st.connection for Snowflake operations.
-    For Cortex API calls, we'll need to use SQL functions instead of REST endpoints.
+    In SPCS, we can make external REST API calls using requests library,
+    but we need to get authentication credentials properly.
     """
     logger.info(f"SPCS API request: {method} {endpoint}")
     
-    # Import streamlit for connection
     try:
         import streamlit as st
+        
+        # Get Snowflake connection details from st.connection
         conn = st.connection("snowflake")
         
-        # For Cortex Agents, we need to use SQL functions instead of REST API
-        if "/cortex/agent" in endpoint:
-            return _handle_cortex_agents_via_sql(conn, payload)
-        elif "/cortex/analyst" in endpoint:
-            return _handle_cortex_analyst_via_sql(conn, payload)
-        else:
-            logger.error(f"Unsupported API endpoint in SPCS: {endpoint}")
-            raise RuntimeError(f"API endpoint not supported in SPCS: {endpoint}")
+        # Get account URL and build full endpoint
+        # Access the underlying Snowflake connection to get account info
+        snowflake_conn = conn._instance._conn
+        account_url = f"{snowflake_conn.host}"
+        full_url = f"https://{account_url}{endpoint}"
+        
+        # Use the connection's session token for authentication
+        session_token = snowflake_conn.get_session_token()
+        
+        # Set up proper authentication headers
+        auth_headers = {
+            "Authorization": f"Snowflake Token=\"{session_token}\"",
+            "Content-Type": "application/json"
+        }
+        
+        # Add any additional headers
+        if headers:
+            auth_headers.update(headers)
+        
+        logger.debug(f"SPCS: Making request to {full_url}")
+        
+        # Make the request using requests library
+        kwargs = {
+            'timeout': timeout / 1000,  # Convert ms to seconds
+            'headers': auth_headers
+        }
+        
+        if params:
+            kwargs['params'] = params
             
+        if payload:
+            kwargs['json'] = payload
+            
+        if files:
+            kwargs['files'] = files
+            # Remove content-type for file uploads
+            if 'Content-Type' in kwargs['headers']:
+                del kwargs['headers']['Content-Type']
+        
+        response = requests.request(method, full_url, **kwargs)
+        
+        # Create response object that matches _snowflake response format
+        class SPCSResponse:
+            def __init__(self, requests_response):
+                self.status = requests_response.status_code
+                self.reason = requests_response.reason
+                try:
+                    self.content = requests_response.json()
+                except:
+                    self.content = requests_response.text
+        
+        return SPCSResponse(response)
+        
     except Exception as e:
         logger.error(f"SPCS API request failed: {e}")
-        raise
+        raise RuntimeError(f"Failed to make SPCS API request: {e}")
 
 
-def _handle_cortex_agents_via_sql(conn, payload: Dict) -> Any:
-    """Handle Cortex Agents requests via SQL functions in SPCS."""
-    logger.info("Using SQL-based Cortex Agents approach in SPCS")
-    
-    # Extract the user message from the payload
-    messages = payload.get("messages", [])
-    if not messages:
-        raise ValueError("No messages in payload")
-    
-    user_message = ""
-    for msg in messages:
-        if msg.get("role") == "user":
-            content = msg.get("content", [])
-            for item in content:
-                if item.get("type") == "text":
-                    user_message = item.get("text", "")
-                    break
-            break
-    
-    if not user_message:
-        raise ValueError("No user message found in payload")
-    
-    # Use SNOWFLAKE.CORTEX.COMPLETE for basic AI responses in SPCS
-    # This is a fallback since we can't use the full Agents API
-    query = f"""
-    SELECT SNOWFLAKE.CORTEX.COMPLETE(
-        'claude-3-5-sonnet',
-        'You are a healthcare AI assistant for Texas Children\'s Hospital. 
-        Answer this question about pediatric patient data: {user_message}'
-    ) as response
-    """
-    
-    try:
-        result = conn.query(query)
-        response_text = result.iloc[0]['RESPONSE'] if not result.empty else "No response generated"
-        
-        # Create response object that mimics the v2 API format
-        class SPCSResponse:
-            def __init__(self, text):
-                self.status = 200
-                self.reason = "OK"
-                self.content = [{
-                    "event": "response",
-                    "data": {
-                        "content": [{
-                            "type": "text",
-                            "text": text
-                        }]
-                    }
-                }]
-        
-        return SPCSResponse(response_text)
-        
-    except Exception as e:
-        logger.error(f"SQL-based Cortex request failed: {e}")
-        raise
-
-
-def _handle_cortex_analyst_via_sql(conn, payload: Dict) -> Any:
-    """Handle Cortex Analyst requests via SQL functions in SPCS."""
-    logger.info("Using SQL-based Cortex Analyst approach in SPCS")
-    
-    # Extract question from payload
-    messages = payload.get("messages", [])
-    question = ""
-    for msg in messages:
-        if msg.get("role") == "user":
-            content = msg.get("content", [])
-            for item in content:
-                if item.get("type") == "text":
-                    question = item.get("text", "")
-                    break
-            break
-    
-    # Use SNOWFLAKE.CORTEX.ANALYST for structured queries
-    semantic_model = payload.get("semantic_model_file", "@AI_ML.SEMANTIC_MODEL_STAGE/patient_analytics_semantic_model.yaml")
-    
-    query = f"""
-    SELECT SNOWFLAKE.CORTEX.ANALYST(
-        '{question}',
-        '{semantic_model}'
-    ) as analysis
-    """
-    
-    try:
-        result = conn.query(query)
-        analysis = result.iloc[0]['ANALYSIS'] if not result.empty else {}
-        
-        # Create response object that mimics the REST API format
-        class SPCSResponse:
-            def __init__(self, analysis_result):
-                self.status = 200
-                self.reason = "OK"
-                self.content = analysis_result
-        
-        return SPCSResponse(analysis)
-        
-    except Exception as e:
-        logger.error(f"SQL-based Analyst request failed: {e}")
-        raise
 
 
 def get_current_session():
