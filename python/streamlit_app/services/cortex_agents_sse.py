@@ -391,12 +391,31 @@ def _try_sse_streaming(
         import streamlit as st
         conn = st.connection("snowflake")
         
-        # Get account URL and session token from the connection
-        snowflake_conn = conn._instance._conn
-        account_url = snowflake_conn.host
-        session_token = snowflake_conn.get_session_token()
+        # Get account URL and authentication info
+        connection_info = conn._get_connection_info()
+        account = connection_info.get('account', '')
         
-        full_url = f"https://{account_url}{api_endpoint}"
+        if not account:
+            raise RuntimeError("Cannot determine account URL from st.connection")
+            
+        full_url = f"https://{account}.snowflakecomputing.com{api_endpoint}"
+        
+        # Get authentication token from the connection
+        auth_token = None
+        try:
+            if hasattr(conn, '_connection'):
+                raw_conn = conn._connection
+                if hasattr(raw_conn, 'get_session_token'):
+                    auth_token = raw_conn.get_session_token()
+            elif hasattr(conn, 'raw_connection'):
+                raw_conn = conn.raw_connection
+                if hasattr(raw_conn, 'get_session_token'):
+                    auth_token = raw_conn.get_session_token()
+        except Exception as e:
+            logger.debug(f"Could not get session token: {e}")
+        
+        if not auth_token:
+            raise RuntimeError("Cannot get authentication token from st.connection in SPCS")
         
         logger.info(f"SSE: Attempting real streaming to: {full_url}")
         

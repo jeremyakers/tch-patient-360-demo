@@ -99,14 +99,61 @@ def _send_spcs_api_request(
         # Get Snowflake connection details from st.connection
         conn = st.connection("snowflake")
         
-        # Get account URL and build full endpoint
-        # Access the underlying Snowflake connection to get account info
-        snowflake_conn = conn._instance._conn
-        account_url = f"{snowflake_conn.host}"
-        full_url = f"https://{account_url}{endpoint}"
+        # Debug: Log the connection object structure to understand the API
+        logger.info(f"SPCS: SnowflakeConnection type: {type(conn)}")
+        logger.info(f"SPCS: SnowflakeConnection attributes: {dir(conn)}")
         
-        # Use the connection's session token for authentication
-        session_token = snowflake_conn.get_session_token()
+        # Try to access the raw connection in different ways
+        raw_conn = None
+        account_url = None
+        session_token = None
+        
+        # Method 1: Try _connection attribute
+        if hasattr(conn, '_connection'):
+            raw_conn = conn._connection
+            logger.info(f"SPCS: Found _connection attribute, type: {type(raw_conn)}")
+        
+        # Method 2: Try raw_connection method/property
+        elif hasattr(conn, 'raw_connection'):
+            try:
+                raw_conn = conn.raw_connection
+                logger.info(f"SPCS: Found raw_connection, type: {type(raw_conn)}")
+            except Exception as e:
+                logger.debug(f"raw_connection failed: {e}")
+        
+        # Method 3: Try _instance attribute
+        elif hasattr(conn, '_instance'):
+            instance = conn._instance
+            logger.info(f"SPCS: Found _instance, type: {type(instance)}")
+            if hasattr(instance, '_connection'):
+                raw_conn = instance._connection
+                logger.info(f"SPCS: Found _instance._connection, type: {type(raw_conn)}")
+        
+        if not raw_conn:
+            logger.error(f"SPCS: Cannot access underlying connection. Available attributes: {[attr for attr in dir(conn) if not attr.startswith('__')]}")
+            raise RuntimeError("Cannot access underlying Snowflake connection from st.connection")
+        
+        # Try to get account URL and session token
+        try:
+            if hasattr(raw_conn, 'host'):
+                account_url = raw_conn.host
+            elif hasattr(raw_conn, 'account'):
+                account_url = f"{raw_conn.account}.snowflakecomputing.com"
+            
+            if hasattr(raw_conn, 'get_session_token'):
+                session_token = raw_conn.get_session_token()
+            elif hasattr(raw_conn, 'session_token'):
+                session_token = raw_conn.session_token
+                
+        except Exception as e:
+            logger.error(f"Failed to get connection details: {e}")
+            logger.error(f"Raw connection attributes: {[attr for attr in dir(raw_conn) if not attr.startswith('__')]}")
+            raise RuntimeError(f"Cannot extract connection details: {e}")
+        
+        if not account_url or not session_token:
+            raise RuntimeError(f"Missing connection details - account_url: {bool(account_url)}, session_token: {bool(session_token)}")
+        
+        full_url = f"https://{account_url}{endpoint}"
         
         # Set up proper authentication headers
         auth_headers = {
