@@ -216,8 +216,6 @@ def render_chat_interface():
                         with st.expander("🧠 Agent Reasoning Process", expanded=False):
                             # Join all thinking steps into a single paragraph
                             full_thinking = ' '.join(message['thinking_steps'])
-                            # Remove any "Step N:" prefixes that might be in the saved steps
-                            full_thinking = re.sub(r'Step \d+:\s*', '', full_thinking)
                             st.markdown(full_thinking)
                     
                     # Display SQL if present
@@ -612,22 +610,13 @@ def _process_user_query(query: str):
                     logger.debug(f"CHAT: Event data: {event}")
                     
                     if event_type == "thinking":
-                        # Just append thinking text to the buffer - no steps, no new lines
+                        # Just append thinking text to the buffer
                         thinking_text = event.get("text", "")
                         
                         # Store original for history
                         thinking_steps.append(thinking_text)
                         
-                        # Clean up the text - remove Step prefixes and fix spacing
-                        # The agent sends fragments like "Step 1: Fin", "d patients with asth", "ma"
-                        if thinking_text.startswith('Step ') and ':' in thinking_text:
-                            # This is a new step, extract just the content after the colon
-                            thinking_text = thinking_text.split(':', 1)[1].strip()
-                        elif re.match(r'^Step \d+$', thinking_text.strip()):
-                            # This is just "Step N" without content, skip it
-                            thinking_text = ''
-                        
-                        # Accumulate text
+                        # Accumulate text as-is - the agent sends proper text
                         thinking_buffer += thinking_text
                         
                         # Update display with accumulated text in scrollable text area
