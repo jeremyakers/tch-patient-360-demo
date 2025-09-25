@@ -562,6 +562,9 @@ def _process_user_query(query: str):
     response_container = st.container()
     thinking_container = st.container()
     
+    # Create placeholder for streaming response
+    response_placeholder = response_container.empty()
+    
     # Initialize response components
     thinking_steps = []
     sql_query = None
@@ -798,27 +801,8 @@ def _process_user_query(query: str):
             
             st.session_state.chat_messages.append(assistant_message)
             
-            # Display the final response immediately without rerun
-            with response_container:
-                with st.chat_message("assistant"):
-                    st.markdown(response_text)
-                    
-                    # Display SQL if present
-                    if sql_query:
-                        st.markdown("### 🔍 Generated SQL Query")
-                        st.code(sql_query, language="sql")
-                        
-                        # Display results if present
-                        if results is not None:
-                            st.markdown("### 📊 Query Results")
-                            try:
-                                df = results.to_pandas()
-                                if not df.empty:
-                                    st.dataframe(df, use_container_width=True)
-                                else:
-                                    st.info("Query executed successfully but returned no results.")
-                            except Exception as e:
-                                st.error(f"Error displaying results: {e}")
+            # Don't display response here - it's already being displayed by the SSE streaming
+            # The streaming handles the real-time response display
             
             # Update conversation history for context
             st.session_state.conversation_history.extend([
