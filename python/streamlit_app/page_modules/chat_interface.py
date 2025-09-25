@@ -577,6 +577,7 @@ def _process_user_query(query: str):
     
     with thinking_container:
         thinking_expander = st.expander("🧠 Agent Thinking Process (Live)", expanded=True)
+        thinking_placeholder = thinking_expander.empty()
         
     with response_container:
         with st.spinner("🤖 Processing your request with AI agents..."):
@@ -596,6 +597,11 @@ def _process_user_query(query: str):
                 event_count = 0
                 logger.info("DEBUG: Starting SSE streaming loop")
                 
+                # Buffer for accumulating thinking text
+                current_thinking_buffer = ""
+                thinking_display_lines = []
+                max_display_lines = 5  # Show only last 5 lines of thinking
+                
                 for event in send_message_with_streaming(
                     cortex_agents.api_endpoint,
                     payload,
@@ -607,33 +613,61 @@ def _process_user_query(query: str):
                     logger.debug(f"CHAT: Event data: {event}")
                     
                     if event_type == "thinking":
-                        # Show thinking step in real-time
+                        # Accumulate thinking text
                         step_count += 1
                         thinking_text = event["text"]
                         thinking_steps.append(thinking_text)
-                        with thinking_expander:
-                            st.markdown(f"**Step {step_count}:** {thinking_text[:300]}...")
+                        
+                        # Update display with condensed view
+                        current_thinking_buffer += thinking_text + " "
+                        
+                        # Only update display periodically (every 50 chars or on sentence end)
+                        if len(current_thinking_buffer) > 50 or current_thinking_buffer.endswith(('.', '!', '?', '...')):
+                            # Truncate long buffers for display
+                            display_text = current_thinking_buffer[:200] + "..." if len(current_thinking_buffer) > 200 else current_thinking_buffer
+                            thinking_display_lines.append(f"**Step {step_count}:** {display_text}")
+                            
+                            # Keep only last N lines
+                            if len(thinking_display_lines) > max_display_lines:
+                                thinking_display_lines = thinking_display_lines[-max_display_lines:]
+                            
+                            # Update display
+                            thinking_placeholder.markdown("\n\n".join(thinking_display_lines))
+                            current_thinking_buffer = ""  # Reset buffer
                     
                     elif event_type == "tool_use":
-                        # Show tool being used
-                        with thinking_expander:
-                            st.info(f"🔧 Using tool: **{event['tool_name']}**")
-                            if event.get("query"):
-                                st.code(event["query"][:300] + "...", language="text")
+                        # Show tool being used more concisely
+                        tool_name = event.get('tool_name', 'Unknown')
+                        thinking_display_lines.append(f"🔧 **Using tool:** {tool_name}")
+                        
+                        # Keep only last N lines
+                        if len(thinking_display_lines) > max_display_lines:
+                            thinking_display_lines = thinking_display_lines[-max_display_lines:]
+                        
+                        thinking_placeholder.markdown("\n\n".join(thinking_display_lines))
                     
                     elif event_type == "sql":
-                        # Capture and show SQL query
+                        # Capture SQL query
                         sql_query = event["query"]
-                        with thinking_expander:
-                            st.success("✅ Generated SQL query")
-                            with st.expander("View SQL", expanded=False):
-                                st.code(sql_query, language="sql")
+                        thinking_display_lines.append("✅ **Generated SQL query**")
+                        
+                        # Keep only last N lines
+                        if len(thinking_display_lines) > max_display_lines:
+                            thinking_display_lines = thinking_display_lines[-max_display_lines:]
+                        
+                        thinking_placeholder.markdown("\n\n".join(thinking_display_lines))
                     
                     elif event_type == "search_results":
                         # Capture search results
                         search_results = event.get("results", [])
-                        with thinking_expander:
-                            st.success(f"✅ Found {event['count']} search results")
+                        count = event.get('count', len(search_results))
+                        thinking_display_lines.append(f"✅ **Found {count} search results**")
+                        
+                        # Keep only last N lines
+                        if len(thinking_display_lines) > max_display_lines:
+                            thinking_display_lines = thinking_display_lines[-max_display_lines:]
+                        
+                        thinking_placeholder.markdown("\n\n".join(thinking_display_lines))
                     
                     elif event_type == "response_text":
                         # Update final response
