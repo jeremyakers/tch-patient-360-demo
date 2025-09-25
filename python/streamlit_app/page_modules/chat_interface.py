@@ -632,15 +632,15 @@ def _process_user_query(query: str):
                                 st.markdown("### 📊 Query Results")
                                 st.dataframe(table_df, use_container_width=True)
                             
-                            # Display chart if we have it
-                            if has_chart and chart_spec is not None:
-                                st.markdown("### 📈 Data Visualization")
-                                st.vega_lite_chart(chart_spec, use_container_width=True)
-                            
-                            # Display response text if we have it
+                            # Display response text BEFORE chart (agent expects chart "below" the text)
                             if final_response:
                                 st.markdown("### 💬 Response")
                                 st.markdown(final_response)
+                            
+                            # Display chart AFTER response text (agent says "chart below")
+                            if has_chart and chart_spec is not None:
+                                st.markdown("### 📈 Data Visualization")
+                                st.vega_lite_chart(chart_spec, use_container_width=True)
                 
                 for event in send_message_with_streaming(
                     cortex_agents.api_endpoint,
@@ -671,7 +671,7 @@ def _process_user_query(query: str):
                     elif event_type == "tool_use":
                         # Show tool status once, append to thinking buffer instead of separate status
                         tool_name = event.get('tool_name', 'Unknown')
-                        tool_message = f"\n\n🔧 Using tool: {tool_name}"
+                        tool_message = f"\n\n🔧 Using tool: {tool_name}\n\n"
                         thinking_buffer += tool_message
                         
                         # Update display
@@ -684,7 +684,7 @@ def _process_user_query(query: str):
                         # Capture SQL query and append status to thinking buffer
                         sql_query = event["query"]
                         has_sql = True
-                        sql_message = f"\n\n✅ Generated SQL query"
+                        sql_message = f"\n\n✅ Generated SQL query\n\n"
                         thinking_buffer += sql_message
                         
                         # Update thinking display
@@ -700,7 +700,7 @@ def _process_user_query(query: str):
                         # Capture search results and append status to thinking buffer
                         search_results = event.get("results", [])
                         count = event.get('count', len(search_results))
-                        search_message = f"\n\n✅ Found {count} search results"
+                        search_message = f"\n\n✅ Found {count} search results\n\n"
                         thinking_buffer += search_message
                         
                         # Update display
