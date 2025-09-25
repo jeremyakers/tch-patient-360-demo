@@ -610,7 +610,37 @@ def _process_user_query(query: str):
                 # Single buffer for accumulating ALL thinking text as one continuous paragraph
                 thinking_buffer = ""
                 tool_status = ""
-                tool_status_shown = False  # Track if we've shown the tool status
+                
+                # Track what content we have for the response
+                has_sql = False
+                has_table = False
+                has_chart = False
+                chart_spec = None
+                table_df = None
+                
+                def update_response_display():
+                    """Update the complete response display with all accumulated content"""
+                    with response_placeholder:
+                        with st.chat_message("assistant"):
+                            # Display SQL query if we have it
+                            if has_sql and sql_query:
+                                st.markdown("### 🔍 Generated SQL Query")
+                                st.code(sql_query, language="sql")
+                            
+                            # Display table results if we have them
+                            if has_table and table_df is not None:
+                                st.markdown("### 📊 Query Results")
+                                st.dataframe(table_df, use_container_width=True)
+                            
+                            # Display chart if we have it
+                            if has_chart and chart_spec is not None:
+                                st.markdown("### 📈 Data Visualization")
+                                st.vega_lite_chart(chart_spec, use_container_width=True)
+                            
+                            # Display response text if we have it
+                            if final_response:
+                                st.markdown("### 💬 Response")
+                                st.markdown(final_response)
                 
                 for event in send_message_with_streaming(
                     cortex_agents.api_endpoint,
@@ -653,6 +683,7 @@ def _process_user_query(query: str):
                     elif event_type == "sql":
                         # Capture SQL query and append status to thinking buffer
                         sql_query = event["query"]
+                        has_sql = True
                         sql_message = f"\n\n✅ Generated SQL query"
                         thinking_buffer += sql_message
                         
@@ -662,13 +693,8 @@ def _process_user_query(query: str):
                             with st.chat_message("assistant", avatar="🧠"):
                                 st.markdown(thinking_buffer)
                         
-                        # Also display the SQL query in the response area
-                        with response_placeholder:
-                            with st.chat_message("assistant"):
-                                if final_response:
-                                    st.markdown(final_response)
-                                st.markdown("### 🔍 Generated SQL Query")
-                                st.code(sql_query, language="sql")
+                        # Update unified response display
+                        update_response_display()
                     
                     elif event_type == "search_results":
                         # Capture search results and append status to thinking buffer
@@ -691,111 +717,78 @@ def _process_user_query(query: str):
                         # Update the final response with accumulated text
                         final_response = accumulated_text
                         
-                        # Display the streaming response in real-time, preserving SQL and other content
-                        with response_placeholder:
-                            with st.chat_message("assistant"):
-                                # Display SQL query if we have it (preserve it)
-                                if sql_query:
-                                    st.markdown("### 🔍 Generated SQL Query")
-                                    st.code(sql_query, language="sql")
-                                
-                                # Display the streaming response text
-                                if accumulated_text:
-                                    st.markdown("### 💬 Response")
-                                    st.markdown(accumulated_text)
+                        # Update unified response display with all content
+                        update_response_display()
                         
                         logger.debug(f"Text delta received: {len(text_delta)} chars, total: {len(accumulated_text)} chars")
                     
                     elif event_type == "table":
-                        # Display SQL query results table
+                        # Process and store table data
                         table_data = event.get("data", {})
                         logger.info("Received table event for SQL results")
                         
-                        with response_placeholder:
-                            with st.chat_message("assistant"):
-                                # Display SQL query if we have it (preserve it)
-                                if sql_query:
-                                    st.markdown("### 🔍 Generated SQL Query")
-                                    st.code(sql_query, language="sql")
-                                
-                                # Display the table results
-                                st.markdown("### 📊 Query Results")
-                                try:
-                                    # Parse table data from Cortex response format
-                                    if 'result_set' in table_data:
-                                        result_set = table_data['result_set']
-                                        if 'data' in result_set and 'result_set_meta_data' in result_set:
-                                            import pandas as pd
-                                            import numpy as np
-                                            
-                                            # Extract data and column names
-                                            data_array = np.array(result_set['data'])
-                                            metadata = result_set['result_set_meta_data']
-                                            
-                                            # Get column names
-                                            if 'row_type' in metadata:
-                                                column_names = [col.get('name', f'col_{i}') for i, col in enumerate(metadata['row_type'])]
-                                            else:
-                                                column_names = [f'col_{i}' for i in range(len(data_array[0]) if len(data_array) > 0 else 0)]
-                                            
-                                            # Create and display DataFrame
-                                            df = pd.DataFrame(data_array, columns=column_names)
-                                            st.dataframe(df, use_container_width=True)
-                                
+                        try:
+                            # Parse table data from Cortex response format
+                            if 'result_set' in table_data:
+                                result_set = table_data['result_set']
+                                if 'data' in result_set and 'result_set_meta_data' in result_set:
+                                    import pandas as pd
+                                    import numpy as np
                                     
-                                except Exception as e:
-                                    st.error(f"Error displaying table: {e}")
-                                    logger.error(f"Table display error: {e}")
-                                
-                                # Display response text if we have it (outside try block)
-                                if final_response:
-                                    st.markdown("### 💬 Response")
-                                    st.markdown(final_response)
+                                    # Extract data and column names
+                                    data_array = np.array(result_set['data'])
+                                    metadata = result_set['result_set_meta_data']
+                                    
+                                    # Get column names
+                                    if 'row_type' in metadata:
+                                        column_names = [col.get('name', f'col_{i}') for i, col in enumerate(metadata['row_type'])]
+                                    else:
+                                        column_names = [f'col_{i}' for i in range(len(data_array[0]) if len(data_array) > 0 else 0)]
+                                    
+                                    # Store the DataFrame
+                                    table_df = pd.DataFrame(data_array, columns=column_names)
+                                    has_table = True
+                                    
+                        except Exception as e:
+                            logger.error(f"Table processing error: {e}")
+                        
+                        # Update unified response display
+                        update_response_display()
                     
                     elif event_type == "chart":
-                        # Display chart visualization
+                        # Process and store chart data
                         chart_data = event.get("data", {})
                         logger.info("Received chart event for visualization")
                         
-                        with response_placeholder:
-                            with st.chat_message("assistant"):
-                                # Display SQL query if we have it (preserve it)
-                                if sql_query:
-                                    st.markdown("### 🔍 Generated SQL Query")
-                                    st.code(sql_query, language="sql")
+                        try:
+                            # Parse chart specification
+                            if 'chart_spec' in chart_data:
+                                import json
+                                chart_spec_raw = chart_data['chart_spec']
+                                if isinstance(chart_spec_raw, str):
+                                    spec = json.loads(chart_spec_raw)
+                                else:
+                                    spec = chart_spec_raw
                                 
-                                # Display the chart
-                                st.markdown("### 📈 Data Visualization")
-                                try:
-                                    # Parse chart specification
-                                    if 'chart_spec' in chart_data:
-                                        import json
-                                        chart_spec = chart_data['chart_spec']
-                                        if isinstance(chart_spec, str):
-                                            spec = json.loads(chart_spec)
+                                # Handle nested chart structure
+                                if isinstance(spec, dict) and "charts" in spec:
+                                    charts_array = spec["charts"]
+                                    if isinstance(charts_array, list) and len(charts_array) > 0:
+                                        first_chart = charts_array[0]
+                                        if isinstance(first_chart, str):
+                                            spec = json.loads(first_chart)
                                         else:
-                                            spec = chart_spec
-                                        
-                                        # Handle nested chart structure
-                                        if isinstance(spec, dict) and "charts" in spec:
-                                            charts_array = spec["charts"]
-                                            if isinstance(charts_array, list) and len(charts_array) > 0:
-                                                first_chart = charts_array[0]
-                                                if isinstance(first_chart, str):
-                                                    spec = json.loads(first_chart)
-                                                else:
-                                                    spec = first_chart
-                                        
-                                        st.vega_lite_chart(spec, use_container_width=True)
-                                        
-                                except Exception as e:
-                                    st.error(f"Error displaying chart: {e}")
-                                    logger.error(f"Chart display error: {e}")
+                                            spec = first_chart
                                 
-                                # Display response text if we have it (outside try block)
-                                if final_response:
-                                    st.markdown("### 💬 Response")
-                                    st.markdown(final_response)
+                                # Store the chart spec
+                                chart_spec = spec
+                                has_chart = True
+                                        
+                        except Exception as e:
+                            logger.error(f"Chart processing error: {e}")
+                        
+                        # Update unified response display
+                        update_response_display()
                     
                     elif event_type == "response_text":
                         # Final complete response
