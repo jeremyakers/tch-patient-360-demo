@@ -571,9 +571,20 @@ def _process_user_query(query: str):
     
     with thinking_container:
         thinking_expander = st.expander("🧠 Agent Thinking Process (Live)", expanded=True)
-        # Use a container for thinking text that we'll update with chat messages for auto-scroll
+        # Use a container with chat messages for built-in auto-scroll behavior
         with thinking_expander:
-            thinking_placeholder = st.empty()
+            # Add CSS to reduce chat message padding for compact display
+            st.html("""
+            <style>
+            .stChatMessage {
+                padding-top: 0.25rem;
+                padding-bottom: 0.25rem;
+                margin-bottom: 0.25rem;
+            }
+            </style>
+            """)
+            thinking_chat_container = st.container(height=200)
+            thinking_placeholder = thinking_chat_container.empty()
         
     with response_container:
         with st.spinner("🤖 Processing your request with AI agents..."):
@@ -616,78 +627,37 @@ def _process_user_query(query: str):
                         # Accumulate text as-is - the agent sends proper text
                         thinking_buffer += thinking_text
                         
-                        # Update display using text_area with auto-scroll JavaScript
-                        display_text = thinking_buffer
-                        if tool_status:
-                            display_text += f"\n\n{tool_status}"
-                        
-                        # Use text_area with unique key and auto-scroll JavaScript
-                        thinking_placeholder.text_area(
-                            "Agent reasoning",
-                            value=display_text,
-                            height=200,
-                            disabled=True,
-                            label_visibility="collapsed",
-                            key=f"thinking_display_{event_count}"
-                        )
-                        
-                        # Add JavaScript to scroll text_area to bottom (based on Streamlit community solutions)
-                        st.markdown(
-                            f"""
-                            <script>
-                            setTimeout(function() {{
-                                // Find the specific text area by looking for our unique key
-                                var textArea = document.querySelector('textarea[data-testid*="thinking_display_{event_count}"]');
-                                if (!textArea) {{
-                                    // Fallback: find by aria-label
-                                    textArea = document.querySelector('textarea[aria-label="Agent reasoning"]');
-                                }}
-                                if (textArea) {{
-                                    textArea.scrollTop = textArea.scrollHeight;
-                                }}
-                            }}, 150);
-                            </script>
-                            """,
-                            unsafe_allow_html=True
-                        )
+                        # Update display using chat_message for built-in auto-scroll
+                        thinking_placeholder.empty()
+                        with thinking_placeholder:
+                            with st.chat_message("assistant", avatar="🧠"):
+                                st.markdown(thinking_buffer)
+                                if tool_status:
+                                    st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "tool_use":
                         # Update tool status
                         tool_name = event.get('tool_name', 'Unknown')
                         tool_status = f"🔧 Using tool: {tool_name}"
                         
-                        # Update display using text_area with auto-scroll
-                        display_text = thinking_buffer
-                        if tool_status:
-                            display_text += f"\n\n{tool_status}"
-                        
-                        thinking_placeholder.text_area(
-                            "Agent reasoning",
-                            value=display_text,
-                            height=200,
-                            disabled=True,
-                            label_visibility="collapsed",
-                            key=f"thinking_display_{event_count}"
-                        )
+                        # Update display using chat_message for built-in auto-scroll
+                        thinking_placeholder.empty()
+                        with thinking_placeholder:
+                            with st.chat_message("assistant", avatar="🧠"):
+                                st.markdown(thinking_buffer)
+                                st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "sql":
                         # Capture SQL query
                         sql_query = event["query"]
                         tool_status = "✅ Generated SQL query"
                         
-                        # Update display using text_area with auto-scroll
-                        display_text = thinking_buffer
-                        if tool_status:
-                            display_text += f"\n\n{tool_status}"
-                        
-                        thinking_placeholder.text_area(
-                            "Agent reasoning",
-                            value=display_text,
-                            height=200,
-                            disabled=True,
-                            label_visibility="collapsed",
-                            key=f"thinking_display_{event_count}"
-                        )
+                        # Update display using chat_message for built-in auto-scroll
+                        thinking_placeholder.empty()
+                        with thinking_placeholder:
+                            with st.chat_message("assistant", avatar="🧠"):
+                                st.markdown(thinking_buffer)
+                                st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "search_results":
                         # Capture search results
@@ -695,19 +665,12 @@ def _process_user_query(query: str):
                         count = event.get('count', len(search_results))
                         tool_status = f"✅ Found {count} search results"
                         
-                        # Update display using text_area with auto-scroll
-                        display_text = thinking_buffer
-                        if tool_status:
-                            display_text += f"\n\n{tool_status}"
-                        
-                        thinking_placeholder.text_area(
-                            "Agent reasoning",
-                            value=display_text,
-                            height=200,
-                            disabled=True,
-                            label_visibility="collapsed",
-                            key=f"thinking_display_{event_count}"
-                        )
+                        # Update display using chat_message for built-in auto-scroll
+                        thinking_placeholder.empty()
+                        with thinking_placeholder:
+                            with st.chat_message("assistant", avatar="🧠"):
+                                st.markdown(thinking_buffer)
+                                st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "text_delta":
                         # Stream the actual response text in real-time!
