@@ -540,14 +540,14 @@ def render_chat_interface():
         default_value = st.session_state.example_query
         del st.session_state.example_query
     
-    # Chat input always at the bottom
+    # Process any pending query first
+    if default_value:
+        _process_user_query(default_value)
+    
+    # Chat input always at the very bottom
     if query := st.chat_input("Ask about patients, conditions, or search clinical documents...", key="chat_input"):
         # Process the query
         _process_user_query(query)
-    
-    # If we have a default value, auto-submit it
-    elif default_value:
-        _process_user_query(default_value)
 
 def _process_user_query(query: str):
     """Process a user query through Cortex Agents."""
@@ -691,10 +691,18 @@ def _process_user_query(query: str):
                         # Update the final response with accumulated text
                         final_response = accumulated_text
                         
-                        # Display the streaming response in real-time
+                        # Display the streaming response in real-time, preserving SQL and other content
                         with response_placeholder:
                             with st.chat_message("assistant"):
-                                st.markdown(accumulated_text)
+                                # Display SQL query if we have it (preserve it)
+                                if sql_query:
+                                    st.markdown("### 🔍 Generated SQL Query")
+                                    st.code(sql_query, language="sql")
+                                
+                                # Display the streaming response text
+                                if accumulated_text:
+                                    st.markdown("### 💬 Response")
+                                    st.markdown(accumulated_text)
                         
                         logger.debug(f"Text delta received: {len(text_delta)} chars, total: {len(accumulated_text)} chars")
                     
@@ -705,10 +713,7 @@ def _process_user_query(query: str):
                         
                         with response_placeholder:
                             with st.chat_message("assistant"):
-                                if final_response:
-                                    st.markdown(final_response)
-                                
-                                # Display SQL query if we have it
+                                # Display SQL query if we have it (preserve it)
                                 if sql_query:
                                     st.markdown("### 🔍 Generated SQL Query")
                                     st.code(sql_query, language="sql")
@@ -736,6 +741,11 @@ def _process_user_query(query: str):
                                             # Create and display DataFrame
                                             df = pd.DataFrame(data_array, columns=column_names)
                                             st.dataframe(df, use_container_width=True)
+                                
+                                # Display response text if we have it
+                                if final_response:
+                                    st.markdown("### 💬 Response")
+                                    st.markdown(final_response)
                                             
                                 except Exception as e:
                                     st.error(f"Error displaying table: {e}")
@@ -748,8 +758,10 @@ def _process_user_query(query: str):
                         
                         with response_placeholder:
                             with st.chat_message("assistant"):
-                                if final_response:
-                                    st.markdown(final_response)
+                                # Display SQL query if we have it (preserve it)
+                                if sql_query:
+                                    st.markdown("### 🔍 Generated SQL Query")
+                                    st.code(sql_query, language="sql")
                                 
                                 # Display the chart
                                 st.markdown("### 📈 Data Visualization")
@@ -774,6 +786,11 @@ def _process_user_query(query: str):
                                                     spec = first_chart
                                         
                                         st.vega_lite_chart(spec, use_container_width=True)
+                                
+                                # Display response text if we have it
+                                if final_response:
+                                    st.markdown("### 💬 Response")
+                                    st.markdown(final_response)
                                         
                                 except Exception as e:
                                     st.error(f"Error displaying chart: {e}")
