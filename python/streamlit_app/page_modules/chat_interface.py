@@ -559,8 +559,9 @@ def _process_user_query(query: str):
     })
     
     # Get response from Cortex Agents with SSE streaming
-    response_container = st.container()
+    # Order matters: thinking box first, then response below it
     thinking_container = st.container()
+    response_container = st.container()
     
     # Create placeholder for streaming response
     response_placeholder = response_container.empty()
@@ -609,6 +610,7 @@ def _process_user_query(query: str):
                 # Single buffer for accumulating ALL thinking text as one continuous paragraph
                 thinking_buffer = ""
                 tool_status = ""
+                tool_status_shown = False  # Track if we've shown the tool status
                 
                 for event in send_message_with_streaming(
                     cortex_agents.api_endpoint,
@@ -635,45 +637,43 @@ def _process_user_query(query: str):
                         with thinking_placeholder:
                             with st.chat_message("assistant", avatar="🧠"):
                                 st.markdown(thinking_buffer)
-                                if tool_status:
-                                    st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "tool_use":
-                        # Update tool status
+                        # Show tool status once, append to thinking buffer instead of separate status
                         tool_name = event.get('tool_name', 'Unknown')
-                        tool_status = f"🔧 Using tool: {tool_name}"
+                        tool_message = f"\n\n🔧 Using tool: {tool_name}"
+                        thinking_buffer += tool_message
                         
-                        # Update display using chat_message for built-in auto-scroll
+                        # Update display
                         thinking_placeholder.empty()
                         with thinking_placeholder:
                             with st.chat_message("assistant", avatar="🧠"):
                                 st.markdown(thinking_buffer)
-                                st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "sql":
-                        # Capture SQL query
+                        # Capture SQL query and append status to thinking buffer
                         sql_query = event["query"]
-                        tool_status = "✅ Generated SQL query"
+                        sql_message = f"\n\n✅ Generated SQL query"
+                        thinking_buffer += sql_message
                         
-                        # Update display using chat_message for built-in auto-scroll
+                        # Update display
                         thinking_placeholder.empty()
                         with thinking_placeholder:
                             with st.chat_message("assistant", avatar="🧠"):
                                 st.markdown(thinking_buffer)
-                                st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "search_results":
-                        # Capture search results
+                        # Capture search results and append status to thinking buffer
                         search_results = event.get("results", [])
                         count = event.get('count', len(search_results))
-                        tool_status = f"✅ Found {count} search results"
+                        search_message = f"\n\n✅ Found {count} search results"
+                        thinking_buffer += search_message
                         
-                        # Update display using chat_message for built-in auto-scroll
+                        # Update display
                         thinking_placeholder.empty()
                         with thinking_placeholder:
                             with st.chat_message("assistant", avatar="🧠"):
                                 st.markdown(thinking_buffer)
-                                st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "text_delta":
                         # Stream the actual response text in real-time!
