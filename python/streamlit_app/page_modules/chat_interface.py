@@ -211,12 +211,8 @@ def render_chat_interface():
                     # Display assistant response
                     st.markdown(message['content'])
                     
-                    # Display thinking steps if present (v2 Agent feature)
-                    if 'thinking_steps' in message and message['thinking_steps']:
-                        with st.expander("🧠 Agent Reasoning Process", expanded=False):
-                            # Join all thinking steps into a single paragraph
-                            full_thinking = ' '.join(message['thinking_steps'])
-                            st.markdown(full_thinking)
+                    # Note: Thinking steps are now shown in the live streaming box during conversation
+                    # No need to duplicate the reasoning process in saved messages
                     
                     # Display SQL if present
                     if 'sql' in message and message['sql']:
@@ -727,8 +723,8 @@ def _process_user_query(query: str):
                         error_occurred = True
                         break
                 
-                # Keep thinking expander visible after completion (don't collapse)
-                # thinking_expander.expanded = False  # Commented out to keep visible
+                # Collapse thinking expander after completion but keep it visible for review
+                thinking_expander.expanded = False
                 
                 # Log what we have
                 logger.info(f"DEBUG: After streaming - final_response length: {len(final_response) if final_response else 0}")
