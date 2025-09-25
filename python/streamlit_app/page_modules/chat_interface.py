@@ -577,7 +577,9 @@ def _process_user_query(query: str):
     
     with thinking_container:
         thinking_expander = st.expander("🧠 Agent Thinking Process (Live)", expanded=True)
-        thinking_placeholder = thinking_expander.empty()
+        # Use a container with fixed height for scrollable thinking text
+        with thinking_expander:
+            thinking_placeholder = st.container(height=200)  # Fixed height, scrollable
         
     with response_container:
         with st.spinner("🤖 Processing your request with AI agents..."):
@@ -618,38 +620,34 @@ def _process_user_query(query: str):
                         # Remove "Step N:" prefixes if they exist (agent might be adding them)
                         thinking_text = re.sub(r'^Step \d+:\s*', '', thinking_text)
                         
-                        # Accumulate text into single paragraph with space between chunks
-                        if thinking_buffer and not thinking_buffer.endswith(' '):
-                            thinking_buffer += ' '
+                        # Accumulate text - the agent already provides proper spacing
                         thinking_buffer += thinking_text
                         
-                        # Update display with accumulated text (like the example)
-                        display_content = thinking_buffer
-                        if tool_status:
-                            display_content = f"{thinking_buffer}\n\n{tool_status}"
-                        thinking_placeholder.markdown(display_content)
+                        # Update display with accumulated text in scrollable container
+                        with thinking_placeholder:
+                            st.markdown(thinking_buffer)
+                            if tool_status:
+                                st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "tool_use":
                         # Update tool status
                         tool_name = event.get('tool_name', 'Unknown')
                         tool_status = f"🔧 **Using tool:** {tool_name}"
                         
-                        # Update display with thinking + tool status
-                        display_content = thinking_buffer
-                        if tool_status:
-                            display_content = f"{thinking_buffer}\n\n{tool_status}"
-                        thinking_placeholder.markdown(display_content)
+                        # Update display in scrollable container
+                        with thinking_placeholder:
+                            st.markdown(thinking_buffer)
+                            st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "sql":
                         # Capture SQL query
                         sql_query = event["query"]
                         tool_status = "✅ **Generated SQL query**"
                         
-                        # Update display
-                        display_content = thinking_buffer
-                        if tool_status:
-                            display_content = f"{thinking_buffer}\n\n{tool_status}"
-                        thinking_placeholder.markdown(display_content)
+                        # Update display in scrollable container
+                        with thinking_placeholder:
+                            st.markdown(thinking_buffer)
+                            st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "search_results":
                         # Capture search results
@@ -657,11 +655,10 @@ def _process_user_query(query: str):
                         count = event.get('count', len(search_results))
                         tool_status = f"✅ **Found {count} search results**"
                         
-                        # Update display
-                        display_content = thinking_buffer
-                        if tool_status:
-                            display_content = f"{thinking_buffer}\n\n{tool_status}"
-                        thinking_placeholder.markdown(display_content)
+                        # Update display in scrollable container
+                        with thinking_placeholder:
+                            st.markdown(thinking_buffer)
+                            st.markdown(f"\n\n{tool_status}")
                     
                     elif event_type == "text_delta":
                         # Stream the actual response text in real-time!
@@ -690,6 +687,9 @@ def _process_user_query(query: str):
                         # Make sure we have the final text
                         if "final_text" in event and event["final_text"]:
                             final_response = event["final_text"]
+                            logger.info(f"DEBUG: Got final_text from done event: {len(final_response)} chars")
+                        else:
+                            logger.warning(f"DEBUG: No final_text in done event. Event keys: {event.keys()}")
                         break
                     
                     elif event_type == "error":
@@ -701,6 +701,11 @@ def _process_user_query(query: str):
                 
                 # Collapse thinking expander after completion
                 thinking_expander.expanded = False
+                
+                # Log what we have
+                logger.info(f"DEBUG: After streaming - final_response length: {len(final_response) if final_response else 0}")
+                logger.info(f"DEBUG: After streaming - sql_query: {bool(sql_query)}")
+                logger.info(f"DEBUG: After streaming - thinking_steps count: {len(thinking_steps)}")
                 
                 # Create response dict for compatibility
                 response = {
