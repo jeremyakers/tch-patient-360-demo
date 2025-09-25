@@ -526,6 +526,20 @@ def _try_sse_streaming(
                                 "accumulated": processor.current_text
                             }
                     
+                    elif event_type == "response.table":
+                        # Table data events
+                        yield {
+                            "type": "table",
+                            "data": data
+                        }
+                    
+                    elif event_type == "response.chart":
+                        # Chart visualization events
+                        yield {
+                            "type": "chart",
+                            "data": data
+                        }
+                    
                     elif event_type == "response.done":
                         # Stream completion
                         yield {

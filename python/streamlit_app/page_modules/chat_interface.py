@@ -656,11 +656,19 @@ def _process_user_query(query: str):
                         sql_message = f"\n\n✅ Generated SQL query"
                         thinking_buffer += sql_message
                         
-                        # Update display
+                        # Update thinking display
                         thinking_placeholder.empty()
                         with thinking_placeholder:
                             with st.chat_message("assistant", avatar="🧠"):
                                 st.markdown(thinking_buffer)
+                        
+                        # Also display the SQL query in the response area
+                        with response_placeholder:
+                            with st.chat_message("assistant"):
+                                if final_response:
+                                    st.markdown(final_response)
+                                st.markdown("### 🔍 Generated SQL Query")
+                                st.code(sql_query, language="sql")
                     
                     elif event_type == "search_results":
                         # Capture search results and append status to thinking buffer
@@ -689,6 +697,87 @@ def _process_user_query(query: str):
                                 st.markdown(accumulated_text)
                         
                         logger.debug(f"Text delta received: {len(text_delta)} chars, total: {len(accumulated_text)} chars")
+                    
+                    elif event_type == "table":
+                        # Display SQL query results table
+                        table_data = event.get("data", {})
+                        logger.info("Received table event for SQL results")
+                        
+                        with response_placeholder:
+                            with st.chat_message("assistant"):
+                                if final_response:
+                                    st.markdown(final_response)
+                                
+                                # Display SQL query if we have it
+                                if sql_query:
+                                    st.markdown("### 🔍 Generated SQL Query")
+                                    st.code(sql_query, language="sql")
+                                
+                                # Display the table results
+                                st.markdown("### 📊 Query Results")
+                                try:
+                                    # Parse table data from Cortex response format
+                                    if 'result_set' in table_data:
+                                        result_set = table_data['result_set']
+                                        if 'data' in result_set and 'result_set_meta_data' in result_set:
+                                            import pandas as pd
+                                            import numpy as np
+                                            
+                                            # Extract data and column names
+                                            data_array = np.array(result_set['data'])
+                                            metadata = result_set['result_set_meta_data']
+                                            
+                                            # Get column names
+                                            if 'row_type' in metadata:
+                                                column_names = [col.get('name', f'col_{i}') for i, col in enumerate(metadata['row_type'])]
+                                            else:
+                                                column_names = [f'col_{i}' for i in range(len(data_array[0]) if len(data_array) > 0 else 0)]
+                                            
+                                            # Create and display DataFrame
+                                            df = pd.DataFrame(data_array, columns=column_names)
+                                            st.dataframe(df, use_container_width=True)
+                                            
+                                except Exception as e:
+                                    st.error(f"Error displaying table: {e}")
+                                    logger.error(f"Table display error: {e}")
+                    
+                    elif event_type == "chart":
+                        # Display chart visualization
+                        chart_data = event.get("data", {})
+                        logger.info("Received chart event for visualization")
+                        
+                        with response_placeholder:
+                            with st.chat_message("assistant"):
+                                if final_response:
+                                    st.markdown(final_response)
+                                
+                                # Display the chart
+                                st.markdown("### 📈 Data Visualization")
+                                try:
+                                    # Parse chart specification
+                                    if 'chart_spec' in chart_data:
+                                        import json
+                                        chart_spec = chart_data['chart_spec']
+                                        if isinstance(chart_spec, str):
+                                            spec = json.loads(chart_spec)
+                                        else:
+                                            spec = chart_spec
+                                        
+                                        # Handle nested chart structure
+                                        if isinstance(spec, dict) and "charts" in spec:
+                                            charts_array = spec["charts"]
+                                            if isinstance(charts_array, list) and len(charts_array) > 0:
+                                                first_chart = charts_array[0]
+                                                if isinstance(first_chart, str):
+                                                    spec = json.loads(first_chart)
+                                                else:
+                                                    spec = first_chart
+                                        
+                                        st.vega_lite_chart(spec, use_container_width=True)
+                                        
+                                except Exception as e:
+                                    st.error(f"Error displaying chart: {e}")
+                                    logger.error(f"Chart display error: {e}")
                     
                     elif event_type == "response_text":
                         # Final complete response
