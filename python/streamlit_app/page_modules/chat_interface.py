@@ -531,6 +531,7 @@ def render_chat_interface():
                                     st.session_state[btn_key] = True
                                     st.rerun()
     
+    
     # Chat input at the bottom (outside of chat_container)
     st.markdown("---")
     
@@ -552,7 +553,7 @@ def render_chat_interface():
 def _process_user_query(query: str):
     """Process a user query through Cortex Agents."""
     
-    # Display user message immediately in chat format
+    # Display user message in chat format
     with st.chat_message("user"):
         st.markdown(query)
     
@@ -562,13 +563,9 @@ def _process_user_query(query: str):
         "content": query
     })
     
-    # Create dedicated containers for this conversation turn
-    # Each turn gets its own containers to preserve previous responses
-    thinking_container = st.container()
-    response_container = st.container()
-    
-    # Create placeholder for streaming response
-    response_placeholder = response_container.empty()
+    # Create unique containers for this conversation turn to preserve previous responses
+    import time
+    turn_id = int(time.time() * 1000)  # Unique timestamp ID
     
     # Initialize response components
     thinking_steps = []
@@ -576,6 +573,11 @@ def _process_user_query(query: str):
     search_results = []
     final_response = ""
     error_occurred = False
+    
+    # Create containers for this specific turn
+    thinking_container = st.container()
+    response_container = st.container()
+    response_placeholder = response_container.empty()
     
     with thinking_container:
         thinking_expander = st.expander("🧠 Agent Thinking Process (Live)", expanded=True)
