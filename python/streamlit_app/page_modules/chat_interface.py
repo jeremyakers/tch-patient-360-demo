@@ -575,8 +575,9 @@ def _process_user_query(query: str):
     
     with thinking_container:
         thinking_expander = st.expander("🧠 Agent Thinking Process (Live)", expanded=True)
-        # Use a text_area for scrollable thinking text with auto-scroll
-        thinking_placeholder = thinking_expander.empty()
+        # Use a scrollable container for thinking text
+        with thinking_expander:
+            thinking_placeholder = st.container(height=200)
         
     with response_container:
         with st.spinner("🤖 Processing your request with AI agents..."):
@@ -619,56 +620,61 @@ def _process_user_query(query: str):
                         # Accumulate text as-is - the agent sends proper text
                         thinking_buffer += thinking_text
                         
-                        # Update display with accumulated text in scrollable text area
+                        # Update display with accumulated text in scrollable container
                         display_text = thinking_buffer
                         if tool_status:
                             display_text += f"\n\n{tool_status}"
-                        # Use text_area for scrollable content with auto-scroll
-                        # Add unique key based on event count to avoid duplicate element error
-                        thinking_placeholder.text_area(
-                            "Agent reasoning:",
-                            value=display_text,
-                            height=200,
-                            disabled=True,
-                            label_visibility="collapsed",
-                            key=f"thinking_area_{event_count}"
-                        )
+                        
+                        # Clear and rewrite to force scroll to bottom
+                        thinking_placeholder.empty()
+                        with thinking_placeholder:
+                            st.markdown(display_text)
+                            # Add JavaScript to scroll to bottom of the container
+                            st.markdown(
+                                f"""
+                                <script>
+                                setTimeout(function() {{
+                                    var containers = document.querySelectorAll('[data-testid="stVerticalBlock"]');
+                                    containers.forEach(function(container) {{
+                                        if (container.scrollHeight > container.clientHeight) {{
+                                            container.scrollTop = container.scrollHeight;
+                                        }}
+                                    }});
+                                }}, 50);
+                                </script>
+                                """,
+                                unsafe_allow_html=True
+                            )
                     
                     elif event_type == "tool_use":
                         # Update tool status
                         tool_name = event.get('tool_name', 'Unknown')
                         tool_status = f"🔧 Using tool: {tool_name}"
                         
-                        # Update display in scrollable text area
+                        # Update display in scrollable container
                         display_text = thinking_buffer
                         if tool_status:
                             display_text += f"\n\n{tool_status}"
-                        thinking_placeholder.text_area(
-                            "Agent reasoning:",
-                            value=display_text,
-                            height=200,
-                            disabled=True,
-                            label_visibility="collapsed",
-                            key=f"thinking_area_{event_count}"
-                        )
+                        
+                        # Clear and rewrite to force scroll to bottom
+                        thinking_placeholder.empty()
+                        with thinking_placeholder:
+                            st.markdown(display_text)
                     
                     elif event_type == "sql":
                         # Capture SQL query
                         sql_query = event["query"]
                         tool_status = "✅ Generated SQL query"
                         
-                        # Update display in scrollable text area
+                        # Update display in scrollable container
                         display_text = thinking_buffer
                         if tool_status:
                             display_text += f"\n\n{tool_status}"
-                        thinking_placeholder.text_area(
-                            "Agent reasoning:",
-                            value=display_text,
-                            height=200,
-                            disabled=True,
-                            label_visibility="collapsed",
-                            key=f"thinking_area_{event_count}"
-                        )
+                        
+                        # Clear and rewrite to force scroll to bottom
+                        thinking_placeholder.empty()
+                        with thinking_placeholder:
+                            st.markdown(display_text)
                     
                     elif event_type == "search_results":
                         # Capture search results
@@ -676,18 +682,15 @@ def _process_user_query(query: str):
                         count = event.get('count', len(search_results))
                         tool_status = f"✅ Found {count} search results"
                         
-                        # Update display in scrollable text area
+                        # Update display in scrollable container
                         display_text = thinking_buffer
                         if tool_status:
                             display_text += f"\n\n{tool_status}"
-                        thinking_placeholder.text_area(
-                            "Agent reasoning:",
-                            value=display_text,
-                            height=200,
-                            disabled=True,
-                            label_visibility="collapsed",
-                            key=f"thinking_area_{event_count}"
-                        )
+                        
+                        # Clear and rewrite to force scroll to bottom
+                        thinking_placeholder.empty()
+                        with thinking_placeholder:
+                            st.markdown(display_text)
                     
                     elif event_type == "text_delta":
                         # Stream the actual response text in real-time!
