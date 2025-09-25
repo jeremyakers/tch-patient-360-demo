@@ -798,6 +798,28 @@ def _process_user_query(query: str):
             
             st.session_state.chat_messages.append(assistant_message)
             
+            # Display the final response immediately without rerun
+            with response_container:
+                with st.chat_message("assistant"):
+                    st.markdown(response_text)
+                    
+                    # Display SQL if present
+                    if sql_query:
+                        st.markdown("### 🔍 Generated SQL Query")
+                        st.code(sql_query, language="sql")
+                        
+                        # Display results if present
+                        if results is not None:
+                            st.markdown("### 📊 Query Results")
+                            try:
+                                df = results.to_pandas()
+                                if not df.empty:
+                                    st.dataframe(df, use_container_width=True)
+                                else:
+                                    st.info("Query executed successfully but returned no results.")
+                            except Exception as e:
+                                st.error(f"Error displaying results: {e}")
+            
             # Update conversation history for context
             st.session_state.conversation_history.extend([
                 {
@@ -814,8 +836,8 @@ def _process_user_query(query: str):
             if len(st.session_state.conversation_history) > 20:
                 st.session_state.conversation_history = st.session_state.conversation_history[-20:]
     
-    # Trigger rerun to display the new messages
-    st.rerun()
+    # Don't rerun - let the response display naturally to preserve the thinking box
+    # st.rerun()  # Removed to keep thinking box visible
 
 def _render_welcome_message():
     """Render a welcome message with capabilities."""
