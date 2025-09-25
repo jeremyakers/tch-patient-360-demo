@@ -742,14 +742,15 @@ def _process_user_query(query: str):
                                             df = pd.DataFrame(data_array, columns=column_names)
                                             st.dataframe(df, use_container_width=True)
                                 
-                                # Display response text if we have it
-                                if final_response:
-                                    st.markdown("### 💬 Response")
-                                    st.markdown(final_response)
-                                            
+                                    
                                 except Exception as e:
                                     st.error(f"Error displaying table: {e}")
                                     logger.error(f"Table display error: {e}")
+                                
+                                # Display response text if we have it (outside try block)
+                                if final_response:
+                                    st.markdown("### 💬 Response")
+                                    st.markdown(final_response)
                     
                     elif event_type == "chart":
                         # Display chart visualization
@@ -786,15 +787,15 @@ def _process_user_query(query: str):
                                                     spec = first_chart
                                         
                                         st.vega_lite_chart(spec, use_container_width=True)
-                                
-                                # Display response text if we have it
-                                if final_response:
-                                    st.markdown("### 💬 Response")
-                                    st.markdown(final_response)
                                         
                                 except Exception as e:
                                     st.error(f"Error displaying chart: {e}")
                                     logger.error(f"Chart display error: {e}")
+                                
+                                # Display response text if we have it (outside try block)
+                                if final_response:
+                                    st.markdown("### 💬 Response")
+                                    st.markdown(final_response)
                     
                     elif event_type == "response_text":
                         # Final complete response
