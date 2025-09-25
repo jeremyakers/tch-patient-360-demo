@@ -15,6 +15,7 @@ from datetime import datetime
 import logging
 import requests
 import os
+import re
 
 from services import cortex_agents, data_service, session_manager
 from services.cortex_agents_sse import send_message_with_streaming
@@ -615,7 +616,12 @@ def _process_user_query(query: str):
                         thinking_text = event.get("text", "")
                         thinking_steps.append(thinking_text)  # Keep for history
                         
-                        # Accumulate text into single paragraph
+                        # Remove "Step N:" prefixes if they exist (agent might be adding them)
+                        thinking_text = re.sub(r'^Step \d+:\s*', '', thinking_text)
+                        
+                        # Accumulate text into single paragraph with space between chunks
+                        if thinking_buffer and not thinking_buffer.endswith(' '):
+                            thinking_buffer += ' '
                         thinking_buffer += thinking_text
                         
                         # Update display with accumulated text (like the example)
