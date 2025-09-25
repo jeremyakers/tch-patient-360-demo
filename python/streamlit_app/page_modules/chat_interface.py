@@ -683,9 +683,12 @@ def _process_user_query(query: str):
                         # Update the final response with accumulated text
                         final_response = accumulated_text
                         
-                        # You could add a response placeholder here to show streaming text
-                        # For now, we just accumulate it
-                        logger.debug(f"Text delta received: {len(text_delta)} chars")
+                        # Display the streaming response in real-time
+                        with response_placeholder:
+                            with st.chat_message("assistant"):
+                                st.markdown(accumulated_text)
+                        
+                        logger.debug(f"Text delta received: {len(text_delta)} chars, total: {len(accumulated_text)} chars")
                     
                     elif event_type == "response_text":
                         # Final complete response
