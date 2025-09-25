@@ -213,13 +213,12 @@ def render_chat_interface():
                     
                     # Display thinking steps if present (v2 Agent feature)
                     if 'thinking_steps' in message and message['thinking_steps']:
-                        with st.expander("🧠 Agent Reasoning Process (v2 Multi-step Thinking)", expanded=False):
-                            st.markdown("**See how the agent broke down your request step by step:**")
-                            for i, thinking_step in enumerate(message['thinking_steps'], 1):
-                                st.markdown(f"**Step {i}:**")
-                                st.markdown(f"> {thinking_step}")
-                                if i < len(message['thinking_steps']):
-                                    st.markdown("---")
+                        with st.expander("🧠 Agent Reasoning Process", expanded=False):
+                            # Join all thinking steps into a single paragraph
+                            full_thinking = ' '.join(message['thinking_steps'])
+                            # Remove any "Step N:" prefixes that might be in the saved steps
+                            full_thinking = re.sub(r'Step \d+:\s*', '', full_thinking)
+                            st.markdown(full_thinking)
                     
                     # Display SQL if present
                     if 'sql' in message and message['sql']:
