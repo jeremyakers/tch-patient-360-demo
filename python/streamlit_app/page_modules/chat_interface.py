@@ -635,12 +635,14 @@ def _process_user_query(query: str):
                         if tool_status:
                             display_text += f"\n\n{tool_status}"
                         # Use text_area for scrollable content with auto-scroll
+                        # Add unique key based on event count to avoid duplicate element error
                         thinking_placeholder.text_area(
                             "Agent reasoning:",
                             value=display_text,
                             height=200,
                             disabled=True,
-                            label_visibility="collapsed"
+                            label_visibility="collapsed",
+                            key=f"thinking_area_{event_count}"
                         )
                     
                     elif event_type == "tool_use":
@@ -657,7 +659,8 @@ def _process_user_query(query: str):
                             value=display_text,
                             height=200,
                             disabled=True,
-                            label_visibility="collapsed"
+                            label_visibility="collapsed",
+                            key=f"thinking_area_{event_count}"
                         )
                     
                     elif event_type == "sql":
@@ -674,7 +677,8 @@ def _process_user_query(query: str):
                             value=display_text,
                             height=200,
                             disabled=True,
-                            label_visibility="collapsed"
+                            label_visibility="collapsed",
+                            key=f"thinking_area_{event_count}"
                         )
                     
                     elif event_type == "search_results":
@@ -692,7 +696,8 @@ def _process_user_query(query: str):
                             value=display_text,
                             height=200,
                             disabled=True,
-                            label_visibility="collapsed"
+                            label_visibility="collapsed",
+                            key=f"thinking_area_{event_count}"
                         )
                     
                     elif event_type == "text_delta":
