@@ -552,14 +552,18 @@ def render_chat_interface():
 def _process_user_query(query: str):
     """Process a user query through Cortex Agents."""
     
-    # Add user message to chat
+    # Display user message immediately in chat format
+    with st.chat_message("user"):
+        st.markdown(query)
+    
+    # Add user message to chat history
     st.session_state.chat_messages.append({
         "role": "user", 
         "content": query
     })
     
-    # Get response from Cortex Agents with SSE streaming
-    # Order matters: thinking box first, then response below it
+    # Create dedicated containers for this conversation turn
+    # Each turn gets its own containers to preserve previous responses
     thinking_container = st.container()
     response_container = st.container()
     
