@@ -593,14 +593,12 @@ def _process_user_query(query: str):
                 logger.info(f"DEBUG: Sending to endpoint: {cortex_agents.api_endpoint}")
                 
                 # Stream the response
-                step_count = 0
                 event_count = 0
                 logger.info("DEBUG: Starting SSE streaming loop")
                 
-                # Buffer for accumulating thinking text
-                current_thinking_buffer = ""
-                thinking_display_lines = []
-                max_display_lines = 5  # Show only last 5 lines of thinking
+                # Single buffer for accumulating ALL thinking text as one continuous paragraph
+                thinking_buffer = ""
+                tool_status = ""
                 
                 for event in send_message_with_streaming(
                     cortex_agents.api_endpoint,
@@ -613,70 +611,80 @@ def _process_user_query(query: str):
                     logger.debug(f"CHAT: Event data: {event}")
                     
                     if event_type == "thinking":
-                        # Accumulate thinking text
-                        step_count += 1
-                        thinking_text = event["text"]
-                        thinking_steps.append(thinking_text)
+                        # Just append thinking text to the buffer - no steps, no new lines
+                        thinking_text = event.get("text", "")
+                        thinking_steps.append(thinking_text)  # Keep for history
                         
-                        # Update display with condensed view
-                        current_thinking_buffer += thinking_text + " "
+                        # Accumulate text into single paragraph
+                        thinking_buffer += thinking_text
                         
-                        # Only update display periodically (every 50 chars or on sentence end)
-                        if len(current_thinking_buffer) > 50 or current_thinking_buffer.endswith(('.', '!', '?', '...')):
-                            # Truncate long buffers for display
-                            display_text = current_thinking_buffer[:200] + "..." if len(current_thinking_buffer) > 200 else current_thinking_buffer
-                            thinking_display_lines.append(f"**Step {step_count}:** {display_text}")
-                            
-                            # Keep only last N lines
-                            if len(thinking_display_lines) > max_display_lines:
-                                thinking_display_lines = thinking_display_lines[-max_display_lines:]
-                            
-                            # Update display
-                            thinking_placeholder.markdown("\n\n".join(thinking_display_lines))
-                            current_thinking_buffer = ""  # Reset buffer
+                        # Update display with accumulated text (like the example)
+                        display_content = thinking_buffer
+                        if tool_status:
+                            display_content = f"{thinking_buffer}\n\n{tool_status}"
+                        thinking_placeholder.markdown(display_content)
                     
                     elif event_type == "tool_use":
-                        # Show tool being used more concisely
+                        # Update tool status
                         tool_name = event.get('tool_name', 'Unknown')
-                        thinking_display_lines.append(f"🔧 **Using tool:** {tool_name}")
+                        tool_status = f"🔧 **Using tool:** {tool_name}"
                         
-                        # Keep only last N lines
-                        if len(thinking_display_lines) > max_display_lines:
-                            thinking_display_lines = thinking_display_lines[-max_display_lines:]
-                        
-                        thinking_placeholder.markdown("\n\n".join(thinking_display_lines))
+                        # Update display with thinking + tool status
+                        display_content = thinking_buffer
+                        if tool_status:
+                            display_content = f"{thinking_buffer}\n\n{tool_status}"
+                        thinking_placeholder.markdown(display_content)
                     
                     elif event_type == "sql":
                         # Capture SQL query
                         sql_query = event["query"]
-                        thinking_display_lines.append("✅ **Generated SQL query**")
+                        tool_status = "✅ **Generated SQL query**"
                         
-                        # Keep only last N lines
-                        if len(thinking_display_lines) > max_display_lines:
-                            thinking_display_lines = thinking_display_lines[-max_display_lines:]
-                        
-                        thinking_placeholder.markdown("\n\n".join(thinking_display_lines))
+                        # Update display
+                        display_content = thinking_buffer
+                        if tool_status:
+                            display_content = f"{thinking_buffer}\n\n{tool_status}"
+                        thinking_placeholder.markdown(display_content)
                     
                     elif event_type == "search_results":
                         # Capture search results
                         search_results = event.get("results", [])
                         count = event.get('count', len(search_results))
-                        thinking_display_lines.append(f"✅ **Found {count} search results**")
+                        tool_status = f"✅ **Found {count} search results**"
                         
-                        # Keep only last N lines
-                        if len(thinking_display_lines) > max_display_lines:
-                            thinking_display_lines = thinking_display_lines[-max_display_lines:]
+                        # Update display
+                        display_content = thinking_buffer
+                        if tool_status:
+                            display_content = f"{thinking_buffer}\n\n{tool_status}"
+                        thinking_placeholder.markdown(display_content)
+                    
+                    elif event_type == "text_delta":
+                        # Stream the actual response text in real-time!
+                        text_delta = event.get("text", "")
+                        accumulated_text = event.get("accumulated", "")
                         
-                        thinking_placeholder.markdown("\n\n".join(thinking_display_lines))
+                        # Update the final response with accumulated text
+                        final_response = accumulated_text
+                        
+                        # Collapse thinking expander when response starts streaming
+                        if thinking_expander.expanded:
+                            thinking_expander.expanded = False
+                        
+                        # You could add a response placeholder here to show streaming text
+                        # For now, we just accumulate it
+                        logger.debug(f"Text delta received: {len(text_delta)} chars")
                     
                     elif event_type == "response_text":
-                        # Update final response
+                        # Final complete response
                         final_response = event["text"]
                         logger.info(f"DEBUG: Received final response text")
                     
                     elif event_type == "done":
                         # Finalize the response
                         logger.info("DEBUG: Stream completed")
+                        # Make sure we have the final text
+                        if "final_text" in event and event["final_text"]:
+                            final_response = event["final_text"]
                         break
                     
                     elif event_type == "error":

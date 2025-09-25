@@ -516,10 +516,15 @@ def _try_sse_streaming(
                                     }
                     
                     elif event_type == "response.text.delta":
-                        # Streaming text response
+                        # Streaming text response - yield it immediately for real-time display
                         text_delta = data.get("text", "")
                         if text_delta:
                             processor.current_text += text_delta
+                            yield {
+                                "type": "text_delta",
+                                "text": text_delta,
+                                "accumulated": processor.current_text
+                            }
                     
                     elif event_type == "response.done":
                         # Stream completion
