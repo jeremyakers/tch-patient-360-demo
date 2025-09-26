@@ -547,6 +547,13 @@ def render_chat_interface():
                     if message.role == 'user':
                         st.markdown(message.content)
                     else:
+                        # Display thinking steps in an expander if available
+                        if message.thinking_steps:
+                            with st.expander("🧠 Agent Reasoning", expanded=False):
+                                for step in message.thinking_steps:
+                                    st.markdown(step)
+                                    st.markdown("---")  # Add separator between steps
+                        
                         # Display processed content if available
                         if message.is_processed and message.processed_content:
                             logger.debug(f"Displaying {len(message.processed_content)} content items")

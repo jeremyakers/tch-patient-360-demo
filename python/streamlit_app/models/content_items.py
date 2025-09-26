@@ -61,6 +61,9 @@ class ChatMessage:
         """Store processed content for persistence across reruns."""
         processed_items = []
         
+        # Thinking steps are stored separately in the ChatMessage object
+        # They will be displayed in an expander in the UI
+        
         # Add SQL query if present
         if sql_query:
             sql_text = f"### 🔍 Generated SQL Query\n```sql\n{sql_query}\n```"
