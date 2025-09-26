@@ -778,7 +778,9 @@ def _process_user_query(query: str):
                     elif event_type == "table":
                         # Process and store table data
                         table_data = event.get("data", {})
-                        logger.info(f"Received table event: {json.dumps(table_data) if isinstance(table_data, dict) else str(table_data)[:200]}")
+                        logger.info(f"Received table event with type: {type(table_data)}")
+                        if isinstance(table_data, dict):
+                            logger.info(f"Table data keys: {list(table_data.keys())}")
                         
                         try:
                             import pandas as pd
