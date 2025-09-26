@@ -16,6 +16,7 @@ import logging
 import requests
 import os
 import re
+import json
 
 from services import cortex_agents, data_service, session_manager
 from services.cortex_agents_sse import send_message_with_streaming
@@ -213,12 +214,12 @@ def render_chat_interface():
         for idx, message in enumerate(st.session_state.chat_messages):
             # Handle both dict format and ChatMessage objects
             if isinstance(message, dict):
-                with st.chat_message(message['role']):
-                    if message['role'] == 'user':
-                        st.markdown(message['content'])
-                    else:
-                        # Display assistant response
-                        st.markdown(message['content'])
+            with st.chat_message(message['role']):
+                if message['role'] == 'user':
+                    st.markdown(message['content'])
+                else:
+                    # Display assistant response
+                    st.markdown(message['content'])
                     
                     # Note: Thinking steps are now shown in the live streaming box during conversation
                     # No need to duplicate the reasoning process in saved messages
@@ -643,8 +644,8 @@ def _process_user_query(query: str):
             thinking_placeholder = thinking_chat_container.empty()
         
     with response_container:
-        with st.spinner("🤖 Processing your request with AI agents..."):
-            try:
+    with st.spinner("🤖 Processing your request with AI agents..."):
+        try:
                 # Build the payload
                 logger.info(f"DEBUG: Building payload for query: {query}")
                 payload = cortex_agents._build_agent_payload(
@@ -777,27 +778,40 @@ def _process_user_query(query: str):
                     elif event_type == "table":
                         # Process and store table data
                         table_data = event.get("data", {})
-                        logger.info("Received table event for SQL results")
+                        logger.info(f"Received table event: {json.dumps(table_data) if isinstance(table_data, dict) else str(table_data)[:200]}")
                         
                         try:
-                            # Parse table data from Cortex response format
-                            if 'result_set' in table_data:
+                            import pandas as pd
+                            import numpy as np
+                            
+                            # Cortex Agents v2 format: data contains result_set with data and resultSetMetaData
+                            if isinstance(table_data, dict) and 'result_set' in table_data:
                                 result_set = table_data['result_set']
-                                if 'data' in result_set and 'result_set_meta_data' in result_set:
-                                    import pandas as pd
-                                    import numpy as np
-                                    
-                                    # Extract data and column names
-                                    data_array = np.array(result_set['data'])
-                                    metadata = result_set['result_set_meta_data']
-                                    
-                                    # Get column names
-                                    if 'row_type' in metadata:
-                                        column_names = [col.get('name', f'col_{i}') for i, col in enumerate(metadata['row_type'])]
+                                
+                                # Extract data array
+                                data_array = np.array(result_set.get('data', []))
+                                
+                                # Extract column names from metadata (v2 format uses resultSetMetaData.rowType)
+                                column_names = []
+                                metadata = result_set.get('resultSetMetaData', {})
+                                row_type = metadata.get('rowType', [])
+                                
+                                if row_type:
+                                    # Extract column names from rowType
+                                    for i, col in enumerate(row_type):
+                                        if isinstance(col, dict):
+                                            column_names.append(col.get('name', f'col_{i}'))
+                                        else:
+                                            column_names.append(f'col_{i}')
+                                else:
+                                    # Fallback: generate column names based on data width
+                                    if len(data_array) > 0 and len(data_array[0]) > 0:
+                                        column_names = [f'col_{i}' for i in range(len(data_array[0]))]
                                     else:
-                                        column_names = [f'col_{i}' for i in range(len(data_array[0]) if len(data_array) > 0 else 0)]
-                                    
-                                    # Store the DataFrame
+                                        column_names = []
+                                
+                                # Create DataFrame and store for display
+                                if len(data_array) > 0 and len(column_names) > 0:
                                     table_df = pd.DataFrame(data_array, columns=column_names)
                                     has_table = True
                                     
@@ -807,6 +821,10 @@ def _process_user_query(query: str):
                                         'columns': column_names,
                                         'title': "### 📊 Query Results"
                                     })
+                                    
+                                    logger.info(f"Processed table: {len(data_array)} rows, {len(column_names)} columns")
+                                else:
+                                    logger.warning(f"Empty table data: {len(data_array)} rows, {len(column_names)} columns")
                                     
                         except Exception as e:
                             logger.error(f"Table processing error: {e}")
@@ -947,25 +965,41 @@ def _process_user_query(query: str):
                 response_text = "I received your query but couldn't generate a meaningful response. Please try rephrasing your question."
                 logger.warning("CHAT WARNING: Empty response_text from streaming")
             
-            # Execute SQL if present
+            # Execute SQL if present and add results to tables
             results = None
             if sql_query:
+                logger.info(f"Executing SQL query, tables_data has {len(tables_data)} items")
                 with st.spinner("Executing SQL query..."):
                     try:
                         results = cortex_agents.execute_sql_query(sql_query)
-                        # If we got results and no table was streamed, add the results as a table
-                        if results is not None and not tables_data:
+                        # Always try to add SQL results as a table if we got data
+                        if results is not None:
                             try:
                                 df = results.to_pandas()
                                 if not df.empty:
-                                    tables_data.append({
-                                        'data': df.values.tolist(),
-                                        'columns': df.columns.tolist(),
-                                        'title': "### 📊 Query Results"
-                                    })
-                                    logger.info(f"Added SQL results to tables_data: {len(df)} rows")
+                                    # Only add if we don't already have table data, or if the data is different
+                                    should_add = True
+                                    if tables_data:
+                                        # Check if this is different data
+                                        existing_rows = len(tables_data[0]['data']) if tables_data[0]['data'] else 0
+                                        if existing_rows == len(df):
+                                            should_add = False  # Probably the same data
+                                    
+                                    if should_add:
+                                        tables_data.append({
+                                            'data': df.values.tolist(),
+                                            'columns': df.columns.tolist(),
+                                            'title': "### 📊 Query Results"
+                                        })
+                                        logger.info(f"Added SQL results to tables_data: {len(df)} rows, {len(df.columns)} columns")
+                                    else:
+                                        logger.info(f"Skipped adding SQL results (already have {len(tables_data)} tables)")
+                                else:
+                                    logger.warning("SQL query returned empty DataFrame")
                             except Exception as e:
                                 logger.error(f"Error converting results to table: {e}")
+                        else:
+                            logger.warning("SQL query returned None")
                     except Exception as e:
                         logger.error(f"Error executing SQL: {e}")
                         results = None
@@ -1012,7 +1046,7 @@ def _process_user_query(query: str):
             # Limit conversation history to last 10 exchanges
             if len(st.session_state.conversation_history) > 20:
                 st.session_state.conversation_history = st.session_state.conversation_history[-20:]
-    
+            
     # Don't rerun - let the response display naturally to preserve the thinking box
     # st.rerun()  # Removed to keep thinking box visible
 
