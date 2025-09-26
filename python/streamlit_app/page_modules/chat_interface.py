@@ -675,20 +675,21 @@ def _process_user_query(query: str):
                     """Update the complete response display with all accumulated content"""
                     with response_placeholder:
                         with st.chat_message("assistant"):
-                            # Display SQL query if we have it
+                            # Display SQL query first if we have it
                             if has_sql and sql_query:
                                 st.markdown("### 🔍 Generated SQL Query")
                                 st.code(sql_query, language="sql")
                             
-                            # Display table results if we have them
-                            if has_table and table_df is not None:
-                                st.markdown("### 📊 Query Results")
-                                st.dataframe(table_df, use_container_width=True)
-                            
-                            # Display response text BEFORE chart (agent expects chart "below" the text)
+                            # Display response text FIRST (before tables/charts)
+                            # Agent expects tables/charts to be "below" the text
                             if final_response:
                                 st.markdown("### 💬 Response")
                                 st.markdown(final_response)
+                            
+                            # Display table results AFTER response (agent says "table below")
+                            if has_table and table_df is not None:
+                                st.markdown("### 📊 Query Results")
+                                st.dataframe(table_df, use_container_width=True)
                             
                             # Display chart AFTER response text (agent says "chart below")
                             if has_chart and chart_spec is not None:
