@@ -214,12 +214,12 @@ def render_chat_interface():
         for idx, message in enumerate(st.session_state.chat_messages):
             # Handle both dict format and ChatMessage objects
             if isinstance(message, dict):
-            with st.chat_message(message['role']):
-                if message['role'] == 'user':
-                    st.markdown(message['content'])
-                else:
-                    # Display assistant response
-                    st.markdown(message['content'])
+                with st.chat_message(message['role']):
+                    if message['role'] == 'user':
+                        st.markdown(message['content'])
+                    else:
+                        # Display assistant response
+                        st.markdown(message['content'])
                     
                     # Note: Thinking steps are now shown in the live streaming box during conversation
                     # No need to duplicate the reasoning process in saved messages
@@ -644,8 +644,8 @@ def _process_user_query(query: str):
             thinking_placeholder = thinking_chat_container.empty()
         
     with response_container:
-    with st.spinner("🤖 Processing your request with AI agents..."):
-        try:
+        with st.spinner("🤖 Processing your request with AI agents..."):
+            try:
                 # Build the payload
                 logger.info(f"DEBUG: Building payload for query: {query}")
                 payload = cortex_agents._build_agent_payload(
@@ -917,135 +917,135 @@ def _process_user_query(query: str):
                 st.error(f"Error: {str(e)}")
                 error_occurred = True
                 response = None
-            
-            if error_occurred:
-                return
+    
+    if error_occurred:
+        return
+        
+    if not response or not final_response:
+        error_msg = "No response received from the agent"
+        
+        # Enhanced error logging
+        logger.error(f"CHAT ERROR: {error_msg}")
+        logger.error(f"CHAT ERROR - Full response object: {response}")
+        
+        # Log debug information if available
+        if response and isinstance(response, dict):
+            if 'debug_info' in response:
+                debug_info = response['debug_info']
+                logger.error(f"CHAT ERROR - Debug Info: {debug_info}")
+                logger.error(f"CHAT ERROR - Endpoint: {debug_info.get('endpoint', 'Unknown')}")
+                logger.error(f"CHAT ERROR - Error Type: {response.get('exception_type', 'Unknown')}")
                 
-            if not response or not final_response:
-                error_msg = "No response received from the agent"
+            if 'full_traceback' in response:
+                logger.error(f"CHAT ERROR - Full Traceback: {response['full_traceback']}")
                 
-                # Enhanced error logging
-                logger.error(f"CHAT ERROR: {error_msg}")
-                logger.error(f"CHAT ERROR - Full response object: {response}")
+            if 'error_code' in response:
+                logger.error(f"CHAT ERROR - Error Code: {response['error_code']}")
                 
-                # Log debug information if available
-                if response and isinstance(response, dict):
-                    if 'debug_info' in response:
-                        debug_info = response['debug_info']
-                        logger.error(f"CHAT ERROR - Debug Info: {debug_info}")
-                        logger.error(f"CHAT ERROR - Endpoint: {debug_info.get('endpoint', 'Unknown')}")
-                        logger.error(f"CHAT ERROR - Error Type: {response.get('exception_type', 'Unknown')}")
-                        
-                    if 'full_traceback' in response:
-                        logger.error(f"CHAT ERROR - Full Traceback: {response['full_traceback']}")
-                        
-                    if 'error_code' in response:
-                        logger.error(f"CHAT ERROR - Error Code: {response['error_code']}")
-                        
-                    if 'status_code' in response:
-                        logger.error(f"CHAT ERROR - Status Code: {response['status_code']}")
-                
-                # Simple error message for user (no debug clutter)
-                error_display = f"❌ I encountered an error: {error_msg}"
-                
-                # Add error to chat history
-                st.session_state.chat_messages.append({
-                    "role": "assistant",
-                    "content": error_display,
-                    "error_details": response if response else None
-                })
-                st.rerun()
-                return
-            
-            # Use the streamed response directly
-            response_text = final_response
-            citations = search_results
-            
-            if not response_text:
-                response_text = "I received your query but couldn't generate a meaningful response. Please try rephrasing your question."
-                logger.warning("CHAT WARNING: Empty response_text from streaming")
-            
-            # Execute SQL if present and add results to tables
-            results = None
-            if sql_query:
-                logger.info(f"Executing SQL query, tables_data has {len(tables_data)} items")
-                with st.spinner("Executing SQL query..."):
+            if 'status_code' in response:
+                logger.error(f"CHAT ERROR - Status Code: {response['status_code']}")
+        
+        # Simple error message for user (no debug clutter)
+        error_display = f"❌ I encountered an error: {error_msg}"
+        
+        # Add error to chat history
+        st.session_state.chat_messages.append({
+            "role": "assistant",
+            "content": error_display,
+            "error_details": response if response else None
+        })
+        st.rerun()
+        return
+    
+    # Use the streamed response directly
+    response_text = final_response
+    citations = search_results
+    
+    if not response_text:
+        response_text = "I received your query but couldn't generate a meaningful response. Please try rephrasing your question."
+        logger.warning("CHAT WARNING: Empty response_text from streaming")
+    
+    # Execute SQL if present and add results to tables
+    results = None
+    if sql_query:
+        logger.info(f"Executing SQL query, tables_data has {len(tables_data)} items")
+        with st.spinner("Executing SQL query..."):
+            try:
+                results = cortex_agents.execute_sql_query(sql_query)
+                # Always try to add SQL results as a table if we got data
+                if results is not None:
                     try:
-                        results = cortex_agents.execute_sql_query(sql_query)
-                        # Always try to add SQL results as a table if we got data
-                        if results is not None:
-                            try:
-                                df = results.to_pandas()
-                                if not df.empty:
-                                    # Only add if we don't already have table data, or if the data is different
-                                    should_add = True
-                                    if tables_data:
-                                        # Check if this is different data
-                                        existing_rows = len(tables_data[0]['data']) if tables_data[0]['data'] else 0
-                                        if existing_rows == len(df):
-                                            should_add = False  # Probably the same data
-                                    
-                                    if should_add:
-                                        tables_data.append({
-                                            'data': df.values.tolist(),
-                                            'columns': df.columns.tolist(),
-                                            'title': "### 📊 Query Results"
-                                        })
-                                        logger.info(f"Added SQL results to tables_data: {len(df)} rows, {len(df.columns)} columns")
-                                    else:
-                                        logger.info(f"Skipped adding SQL results (already have {len(tables_data)} tables)")
-                                else:
-                                    logger.warning("SQL query returned empty DataFrame")
-                            except Exception as e:
-                                logger.error(f"Error converting results to table: {e}")
+                        df = results.to_pandas()
+                        if not df.empty:
+                            # Only add if we don't already have table data, or if the data is different
+                            should_add = True
+                            if tables_data:
+                                # Check if this is different data
+                                existing_rows = len(tables_data[0]['data']) if tables_data[0]['data'] else 0
+                                if existing_rows == len(df):
+                                    should_add = False  # Probably the same data
+                            
+                            if should_add:
+                                tables_data.append({
+                                    'data': df.values.tolist(),
+                                    'columns': df.columns.tolist(),
+                                    'title': "### 📊 Query Results"
+                                })
+                                logger.info(f"Added SQL results to tables_data: {len(df)} rows, {len(df.columns)} columns")
+                            else:
+                                logger.info(f"Skipped adding SQL results (already have {len(tables_data)} tables)")
                         else:
-                            logger.warning("SQL query returned None")
+                            logger.warning("SQL query returned empty DataFrame")
                     except Exception as e:
-                        logger.error(f"Error executing SQL: {e}")
-                        results = None
-            
-            # Create ChatMessage with content persistence
-            assistant_message = ChatMessage(
-                role="assistant",
-                content=response_text,
-                sql=sql_query,
-                thinking_steps=thinking_steps,
-                citations=citations,
-                results=results
-            )
-            
-            # Store processed content for persistence
-            logger.info(f"DEBUG: Storing content - tables: {len(tables_data)}, charts: {len(charts_data)}")
-            if tables_data:
-                logger.info(f"DEBUG: First table has {len(tables_data[0]['data'])} rows, {len(tables_data[0]['columns'])} columns")
-            
-            assistant_message.store_processed_content(
-                processed_text=response_text,
-                sql_query=sql_query,
-                tables=tables_data,
-                charts=charts_data
-            )
-            
-            st.session_state.chat_messages.append(assistant_message)
-            
-            # Don't display response here - it's already being displayed by the SSE streaming
-            # The streaming handles the real-time response display
-            
-            # Update conversation history for context
-            st.session_state.conversation_history.extend([
-                {
-                    "role": "user",
-                    "content": [{"type": "text", "text": query}]
-                },
-                {
-                    "role": "assistant", 
-                    "content": [{"type": "text", "text": response_text}]
-                }
-            ])
-                
-            # Limit conversation history to last 10 exchanges
-            if len(st.session_state.conversation_history) > 20:
-                st.session_state.conversation_history = st.session_state.conversation_history[-20:]
+                        logger.error(f"Error converting results to table: {e}")
+                else:
+                    logger.warning("SQL query returned None")
+            except Exception as e:
+                logger.error(f"Error executing SQL: {e}")
+                results = None
+    
+    # Create ChatMessage with content persistence
+    assistant_message = ChatMessage(
+        role="assistant",
+        content=response_text,
+        sql=sql_query,
+        thinking_steps=thinking_steps,
+        citations=citations,
+        results=results
+    )
+    
+    # Store processed content for persistence
+    logger.info(f"DEBUG: Storing content - tables: {len(tables_data)}, charts: {len(charts_data)}")
+    if tables_data:
+        logger.info(f"DEBUG: First table has {len(tables_data[0]['data'])} rows, {len(tables_data[0]['columns'])} columns")
+    
+    assistant_message.store_processed_content(
+        processed_text=response_text,
+        sql_query=sql_query,
+        tables=tables_data,
+        charts=charts_data
+    )
+    
+    st.session_state.chat_messages.append(assistant_message)
+    
+    # Don't display response here - it's already being displayed by the SSE streaming
+    # The streaming handles the real-time response display
+    
+    # Update conversation history for context
+    st.session_state.conversation_history.extend([
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": query}]
+        },
+        {
+            "role": "assistant", 
+            "content": [{"type": "text", "text": response_text}]
+        }
+    ])
+        
+    # Limit conversation history to last 10 exchanges
+    if len(st.session_state.conversation_history) > 20:
+        st.session_state.conversation_history = st.session_state.conversation_history[-20:]
             
     # Don't rerun - let the response display naturally to preserve the thinking box
     # st.rerun()  # Removed to keep thinking box visible
