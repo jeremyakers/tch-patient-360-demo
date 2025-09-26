@@ -548,14 +548,17 @@ def render_chat_interface():
                     else:
                         # Display processed content if available
                         if message.is_processed and message.processed_content:
-                            for content_item in message.processed_content:
+                            logger.debug(f"Displaying {len(message.processed_content)} content items")
+                            for i, content_item in enumerate(message.processed_content):
                                 if hasattr(content_item, 'actual_instance'):
                                     instance = content_item.actual_instance
+                                    logger.debug(f"Content item {i}: {type(instance).__name__}")
                                     
                                     if isinstance(instance, TextContentItem):
                                         st.markdown(instance.text, unsafe_allow_html=True)
                                     
                                     elif isinstance(instance, TableContentItem):
+                                        logger.info(f"Displaying table with {len(instance.data)} rows, {len(instance.columns)} columns")
                                         if instance.title:
                                             st.markdown(instance.title)
                                         if instance.data and instance.columns:
@@ -950,6 +953,19 @@ def _process_user_query(query: str):
                 with st.spinner("Executing SQL query..."):
                     try:
                         results = cortex_agents.execute_sql_query(sql_query)
+                        # If we got results and no table was streamed, add the results as a table
+                        if results is not None and not tables_data:
+                            try:
+                                df = results.to_pandas()
+                                if not df.empty:
+                                    tables_data.append({
+                                        'data': df.values.tolist(),
+                                        'columns': df.columns.tolist(),
+                                        'title': "### 📊 Query Results"
+                                    })
+                                    logger.info(f"Added SQL results to tables_data: {len(df)} rows")
+                            except Exception as e:
+                                logger.error(f"Error converting results to table: {e}")
                     except Exception as e:
                         logger.error(f"Error executing SQL: {e}")
                         results = None
@@ -965,6 +981,10 @@ def _process_user_query(query: str):
             )
             
             # Store processed content for persistence
+            logger.info(f"DEBUG: Storing content - tables: {len(tables_data)}, charts: {len(charts_data)}")
+            if tables_data:
+                logger.info(f"DEBUG: First table has {len(tables_data[0]['data'])} rows, {len(tables_data[0]['columns'])} columns")
+            
             assistant_message.store_processed_content(
                 processed_text=response_text,
                 sql_query=sql_query,
