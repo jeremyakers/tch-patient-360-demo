@@ -549,6 +549,7 @@ def render_chat_interface():
                     else:
                         # Display thinking steps in an expander if available
                         if message.thinking_steps:
+                            logger.debug(f"Displaying {len(message.thinking_steps)} thinking steps for assistant message")
                             with st.expander("🧠 Agent Reasoning", expanded=False):
                                 for step in message.thinking_steps:
                                     st.markdown(step)
@@ -1015,6 +1016,7 @@ def _process_user_query(query: str):
                 results = None
     
     # Create ChatMessage with content persistence
+    logger.info(f"DEBUG: Creating ChatMessage with {len(thinking_steps)} thinking steps")
     assistant_message = ChatMessage(
         role="assistant",
         content=response_text,
