@@ -551,9 +551,9 @@ def render_chat_interface():
                         if message.thinking_steps:
                             logger.debug(f"Displaying {len(message.thinking_steps)} thinking steps for assistant message")
                             with st.expander("🧠 Agent Reasoning", expanded=False):
+                                # Display the complete thinking process
                                 for step in message.thinking_steps:
                                     st.markdown(step)
-                                    st.markdown("---")  # Add separator between steps
                         
                         # Display processed content if available
                         if message.is_processed and message.processed_content:
@@ -620,6 +620,7 @@ def _process_user_query(query: str):
     
     # Initialize response components
     thinking_steps = []
+    thinking_buffer_for_history = ""  # Accumulate complete thinking text
     sql_query = None
     search_results = []
     final_response = ""
@@ -718,11 +719,9 @@ def _process_user_query(query: str):
                         # Just append thinking text to the buffer
                         thinking_text = event.get("text", "")
                         
-                        # Store original for history
-                        thinking_steps.append(thinking_text)
-                        
-                        # Accumulate text as-is - the agent sends proper text
+                        # Accumulate for both display and history
                         thinking_buffer += thinking_text
+                        thinking_buffer_for_history += thinking_text
                         
                         # Update display using chat_message for built-in auto-scroll
                         thinking_placeholder.empty()
@@ -1014,6 +1013,10 @@ def _process_user_query(query: str):
             except Exception as e:
                 logger.error(f"Error executing SQL: {e}")
                 results = None
+    
+    # Store the complete thinking process as a single step
+    if thinking_buffer_for_history:
+        thinking_steps = [thinking_buffer_for_history]
     
     # Create ChatMessage with content persistence
     logger.info(f"DEBUG: Creating ChatMessage with {len(thinking_steps)} thinking steps")
