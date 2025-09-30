@@ -100,8 +100,9 @@ def parse_v2_agent_response(response: Dict) -> Tuple[str, Optional[str], List[Di
                     # Extract final text response (last text item is the response)
                     elif item_type == "text":
                         text = item.get("text", "")
-                        if text and ("I attempted" in text or "Based on" in text or len(text) > 100):
-                            response_text = text  # Replace, don't append
+                        if text:
+                            # Always capture text responses, not just ones matching patterns
+                            response_text = text  # Replace with latest text
                             logger.debug(f"Found response text: {text[:200]}...")
             
             # Handle error events

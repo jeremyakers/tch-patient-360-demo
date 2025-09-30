@@ -629,6 +629,40 @@ Always provide context about the data timeframe and any limitations of your anal
             error_msg = response.get("error", "Unknown error") if response else "No response received"
             return f"Error: {error_msg}", None, [], []
         
+        # Check if this is a standard Cortex Agents response (non-streaming)
+        if isinstance(response, dict) and "choices" in response:
+            # This is a standard non-streaming response
+            logger.info("Processing standard non-streaming Cortex Agents response")
+            response_text = ""
+            sql_query = None
+            citations = []
+            thinking_steps = []
+            
+            try:
+                choices = response.get("choices", [])
+                if choices:
+                    choice = choices[0]
+                    message = choice.get("message", {})
+                    content = message.get("content", "")
+                    
+                    # Content might be a string or list
+                    if isinstance(content, str):
+                        response_text = content
+                    elif isinstance(content, list):
+                        for item in content:
+                            if isinstance(item, dict):
+                                if item.get("type") == "text":
+                                    response_text += item.get("text", "")
+                            else:
+                                response_text += str(item)
+                    
+                    logger.info(f"Extracted {len(response_text)} chars from standard response")
+                
+            except Exception as e:
+                logger.error(f"Error processing standard response: {e}")
+            
+            return response_text, sql_query, citations, thinking_steps
+        
         # Use the dedicated v2 parser for complex response structures
         if isinstance(response, dict) and "content" in response:
             return parse_v2_agent_response(response)
@@ -995,12 +1029,20 @@ RESPONSE FORMAT:
                 content_value = response.get('content')
                 logger.info(f"Document search response content type: {type(content_value)}")
                 logger.info(f"Document search response content (first 500 chars): {str(content_value)[:500]}")
-                response_payload = {"content": content_value}
+                # For non-streaming responses, content is already parsed
+                if isinstance(content_value, dict):
+                    response_payload = content_value
+                else:
+                    response_payload = {"content": content_value}
             elif hasattr(response, 'content'):
                 content_value = getattr(response, 'content')
                 logger.info(f"Document search response content type: {type(content_value)}")
                 logger.info(f"Document search response content (first 500 chars): {str(content_value)[:500]}")
-                response_payload = {"content": content_value}
+                # For non-streaming responses, content is already parsed
+                if isinstance(content_value, dict):
+                    response_payload = content_value
+                else:
+                    response_payload = {"content": content_value}
             else:
                 logger.error("Document search response missing content (neither attribute nor key)")
                 logger.error(f"Response object: {response}")
@@ -1008,12 +1050,24 @@ RESPONSE FORMAT:
 
             try:
                 logger.info("Processing streaming response content...")
+                # Log the raw response for debugging
+                logger.info(f"Raw response_payload type: {type(response_payload)}")
+                if isinstance(response_payload, dict) and 'content' in response_payload:
+                    content = response_payload['content']
+                    logger.info(f"Content type: {type(content)}")
+                    if isinstance(content, str):
+                        logger.info(f"Content string length: {len(content)}")
+                        logger.info(f"First 1000 chars of content: {content[:1000]}")
+                
                 response_text, _, citations, _ = self.process_agent_response(response_payload)
                 logger.info(f"Extracted response_text length: {len(response_text) if response_text else 0}")
                 logger.info(f"Extracted citations count: {len(citations) if citations else 0}")
 
                 if not response_text and not citations:
-                    return "Error: No meaningful response extracted from agent", []
+                    # Try to provide more helpful error info
+                    logger.error("No meaningful response extracted from agent")
+                    logger.error(f"Raw payload was: {str(response_payload)[:500]}")
+                    return "Error: No meaningful response extracted from agent. Check logs for details.", []
 
                 return response_text, citations
             except Exception as e:
