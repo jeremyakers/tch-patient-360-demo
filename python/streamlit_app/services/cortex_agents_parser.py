@@ -33,8 +33,9 @@ def parse_sse_content(sse_str: str) -> List[Dict]:
     if "event:" in sse_str and "message.delta" in sse_str:
         logger.info("Detected SSE streaming response for document search")
         
-        # Extract any complete text fragments
+        # Extract any complete text fragments and citations
         accumulated_text = ""
+        citations = []
         lines = sse_str.replace("\\n", "\n").split("\n")
         
         for line in lines:
@@ -48,13 +49,26 @@ def parse_sse_content(sse_str: str) -> List[Dict]:
                             if content_item.get("type") == "text":
                                 text_fragment = content_item.get("text", "")
                                 accumulated_text += text_fragment
+                            elif content_item.get("type") == "tool_result":
+                                # Extract citations from tool results
+                                tool_result = content_item.get("tool_result", {})
+                                if "content" in tool_result:
+                                    for result_item in tool_result["content"]:
+                                        if "search_results" in result_item:
+                                            citations.extend(result_item["search_results"])
                 except json.JSONDecodeError:
                     # Skip incomplete JSON fragments
                     pass
         
+        # Clean up the accumulated text - remove weird encoding artifacts
+        # These appear to be citation markers that got garbled
+        accumulated_text = accumulated_text.replace("ã", "【")
+        accumulated_text = accumulated_text.replace("â", "†")
+        accumulated_text = accumulated_text.replace("", "】")
+        
         if accumulated_text:
             logger.info(f"Accumulated {len(accumulated_text)} chars of text from SSE stream")
-            # Return as a simple text response
+            # Return as a simple text response with citations
             return [{
                 "event": "response", 
                 "data": {
@@ -91,12 +105,21 @@ def parse_v2_agent_response(response: Dict) -> Tuple[str, Optional[str], List[Di
         events = []
         if isinstance(content_str, str):
             # Check if it's SSE format (event: ... \ndata: ...)
-            if content_str.startswith("event:") or "\\nevent:" in content_str:
-                logger.info("Parsing SSE format response")
+            # Only use SSE parser for document search responses (which have incomplete streaming)
+            if (content_str.startswith("event:") or "\\nevent:" in content_str) and "message.delta" in content_str:
+                logger.info("Parsing SSE format response (document search)")
                 # Parse SSE format into events
                 events = parse_sse_content(content_str)
+                # For SSE parsed content, return the accumulated text immediately
+                if events and len(events) > 0:
+                    event = events[0]
+                    if "data" in event and "content" in event["data"]:
+                        for item in event["data"]["content"]:
+                            if item.get("type") == "text":
+                                return item.get("text", ""), None, [], []
+                return "", None, [], []
             else:
-                # Try to parse as JSON
+                # Try to parse as JSON (for regular AI Chat responses)
                 try:
                     events = json.loads(content_str)
                 except json.JSONDecodeError:
