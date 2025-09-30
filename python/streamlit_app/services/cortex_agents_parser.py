@@ -30,24 +30,40 @@ def parse_sse_content(sse_str: str) -> List[Dict]:
     # The actual content is incomplete streaming data that we can't fully parse
     
     # Check if this looks like SSE streaming data
-    if "event:" in sse_str and "message.delta" in sse_str:
+    if "event:" in sse_str and ("message.delta" in sse_str or "response.text.annotation" in sse_str):
         logger.info("Detected SSE streaming response for document search")
         
-        # Extract any complete text fragments
+        # Extract any complete text fragments and annotations
         accumulated_text = ""
+        citations = []
         lines = sse_str.replace("\\n", "\n").split("\n")
         
+        current_event = None
+        
         for line in lines:
-            if line.startswith("data:"):
+            # Parse event type
+            if line.startswith("event:"):
+                current_event = line[6:].strip()
+                logger.debug(f"Found SSE event: {current_event}")
+            elif line.startswith("data:"):
                 data_str = line[5:].strip()
                 try:
                     # Try to parse each data line
                     data_obj = json.loads(data_str)
-                    if "delta" in data_obj and "content" in data_obj["delta"]:
+                    
+                    # Handle text deltas
+                    if current_event == "message.delta" and "delta" in data_obj and "content" in data_obj["delta"]:
                         for content_item in data_obj["delta"]["content"]:
                             if content_item.get("type") == "text":
                                 text_fragment = content_item.get("text", "")
                                 accumulated_text += text_fragment
+                    
+                    # Handle annotations (citations) according to Snowflake docs
+                    elif current_event == "response.text.annotation":
+                        # Extract citation information from annotation
+                        logger.info(f"Found annotation data: {data_obj}")
+                        citations.append(data_obj)
+                    
                 except json.JSONDecodeError:
                     # Skip incomplete JSON fragments
                     pass
@@ -72,14 +88,16 @@ def parse_sse_content(sse_str: str) -> List[Dict]:
             accumulated_text = accumulated_text.replace("â", "")
             
             logger.info(f"Accumulated {len(accumulated_text)} chars of text from SSE stream")
-            # Return as a simple text response
+            logger.info(f"Found {len(citations)} citations from annotations")
+            # Return as a simple text response with citations
             return [{
                 "event": "response", 
                 "data": {
                     "content": [{
                         "type": "text",
                         "text": accumulated_text
-                    }]
+                    }],
+                    "citations": citations  # Include parsed citations
                 }
             }]
     
@@ -110,18 +128,25 @@ def parse_v2_agent_response(response: Dict) -> Tuple[str, Optional[str], List[Di
         if isinstance(content_str, str):
             # Check if it's SSE format (event: ... \ndata: ...)
             # SSE format is typically used for document search responses
-            if (content_str.startswith("event:") or "\\nevent:" in content_str) and "message.delta" in content_str:
+            if (content_str.startswith("event:") or "\\nevent:" in content_str) and ("message.delta" in content_str or "response.text.annotation" in content_str):
                 logger.info("Parsing SSE format response (likely document search)")
                 # Parse SSE format into events
                 sse_events = parse_sse_content(content_str)
-                # For SSE parsed content, return the accumulated text immediately
+                # For SSE parsed content, return the accumulated text and citations
                 if sse_events and len(sse_events) > 0:
                     event = sse_events[0]
-                    if "data" in event and "content" in event["data"]:
-                        for item in event["data"]["content"]:
-                            if item.get("type") == "text":
-                                # Return text with empty SQL, citations, and thinking
-                                return item.get("text", ""), None, [], []
+                    if "data" in event:
+                        text = ""
+                        citations = event["data"].get("citations", [])
+                        
+                        # Extract text content
+                        if "content" in event["data"]:
+                            for item in event["data"]["content"]:
+                                if item.get("type") == "text":
+                                    text = item.get("text", "")
+                        
+                        # Return text with citations, empty SQL and thinking
+                        return text, None, citations, []
                 return "", None, [], []
             else:
                 # Try to parse as JSON (for regular AI Chat responses)
