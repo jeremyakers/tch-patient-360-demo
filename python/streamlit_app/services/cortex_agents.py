@@ -1153,10 +1153,6 @@ RESPONSE FORMAT:
             line_count = 0
             
             logger.info("Starting to process SSE stream...")
-            logger.info(f"Response encoding: {response.encoding}")
-            
-            # Capture raw response for debugging
-            raw_events = []
             
             for line in response.iter_lines():
                 line_count += 1
@@ -1165,14 +1161,9 @@ RESPONSE FORMAT:
                     
                 line_str = line.decode('utf-8')
                 
-                # Capture raw event for debugging
-                if line_str.strip():
-                    raw_events.append(line_str)
-                
                 # Parse event type
                 if line_str.startswith("event:"):
                     current_event = line_str[6:].strip()
-                    logger.info(f"SSE event: {current_event}")
                     
                 elif line_str.startswith("data:"):
                     data_str = line_str[5:].strip()
@@ -1186,25 +1177,16 @@ RESPONSE FORMAT:
                         if current_event == "message.delta":
                             # Extract text from delta content
                             if "delta" in data_obj and "content" in data_obj["delta"]:
-                                content_items = data_obj["delta"]["content"]
-                                logger.debug(f"Processing {len(content_items)} content items in delta")
-                                for content_item in content_items:
+                                for content_item in data_obj["delta"]["content"]:
                                     item_type = content_item.get("type", "unknown")
-                                    logger.debug(f"Content item type: {item_type}")
                                     
                                     if item_type == "text":
                                         text_fragment = content_item.get("text", "")
                                         accumulated_text += text_fragment
-                                        logger.debug(f"Added text fragment: {len(text_fragment)} chars")
-                                    
-                                    # Skip tool_use items
-                                    elif item_type == "tool_use":
-                                        logger.debug(f"Skipping tool_use item")
                                     
                                     # Extract tool results which contain the search results
                                     elif item_type == "tool_results":
                                         tool_results = content_item.get("tool_results", {})
-                                        logger.debug(f"Found tool_results of type: {tool_results.get('type')}")
                                         if tool_results.get("type") == "cortex_search":
                                             content_list = tool_results.get("content", [])
                                             for result_item in content_list:
@@ -1224,21 +1206,11 @@ RESPONSE FORMAT:
                                                             "file_path": result.get("doc_id", "")  # Use doc_id as file_path
                                                         }
                                                         citations.append(citation)
-                                                        logger.debug(f"Added citation {idx + 1}: {citation['doc_id']}")
                         
                         # Handle annotations (citations) - as documented
                         elif current_event == "response.text.annotation":
                             logger.info(f"Found annotation: {data_obj}")
                             citations.append(data_obj)
-                        
-                        # Also check for tool results which might contain search results
-                        elif current_event == "message.delta" and "delta" in data_obj:
-                            if "tool_calls" in data_obj["delta"]:
-                                logger.debug(f"Found tool_calls in delta: {data_obj['delta']['tool_calls']}")
-                        
-                        # Log execution trace which might contain citations
-                        elif current_event == "execution_trace":
-                            logger.debug(f"Execution trace: {json.dumps(data_obj)[:200]}...")
                         
                     except json.JSONDecodeError as e:
                         logger.debug(f"Skipping non-JSON data: {data_str[:100]}")
@@ -1258,19 +1230,8 @@ RESPONSE FORMAT:
                 accumulated_text = accumulated_text.replace("ã", "")
                 accumulated_text = accumulated_text.replace("â", "")
             
-            # Log the complete raw response for debugging
             logger.info(f"Processed {line_count} lines from SSE stream")
             logger.info(f"Streaming complete: {len(accumulated_text)} chars, {len(citations)} citations")
-            
-            # Write raw events to telemetry for debugging
-            logger.info("=== RAW SSE RESPONSE START ===")
-            for i, event in enumerate(raw_events[:50]):  # First 50 events
-                logger.info(f"Event {i}: {event}")
-            if len(raw_events) > 50:
-                logger.info(f"... and {len(raw_events) - 50} more events")
-            logger.info("=== RAW SSE RESPONSE END ===")
-            
-            # Also return raw events for UI debugging
             return accumulated_text, citations
             
         except Exception as e:
