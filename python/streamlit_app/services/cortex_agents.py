@@ -989,6 +989,13 @@ RESPONSE FORMAT:
             logger.info(f"Searching documents for {subject_label} with query: {search_query}")
             logger.info(f"Document search payload: {json.dumps(payload, indent=2)}")
             
+            # For streaming responses, we need to handle them differently
+            if payload.get("stream", False):
+                # Handle streaming response properly
+                return self._handle_streaming_document_search(
+                    payload, subject_label, search_query
+                )
+            
             # Make the API call with longer timeout for document search
             response = send_snow_api_request(
                 "POST",
@@ -1082,6 +1089,127 @@ RESPONSE FORMAT:
             logger.error(f"Full traceback: {traceback.format_exc()}")
             return f"Error: Document search failed - {str(e)}. Check logs for details.", []
 
+    def _handle_streaming_document_search(self, payload: Dict, subject_label: str, search_query: str) -> Tuple[str, List[Dict]]:
+        """
+        Handle streaming response for document search with proper SSE parsing.
+        
+        This properly processes Server-Sent Events including response.text.annotation events
+        for citations, just like the AI Chat interface does.
+        """
+        import requests
+        import os
+        
+        try:
+            # Get OAuth token for authentication
+            token_path = "/snowflake/session/token"
+            try:
+                with open(token_path, 'r') as token_file:
+                    oauth_token = token_file.read().strip()
+            except Exception as e:
+                logger.error(f"Cannot read OAuth token: {e}")
+                return "Error: Authentication failed", []
+            
+            # Build full URL
+            snowflake_host = os.getenv('SNOWFLAKE_HOST')
+            if not snowflake_host:
+                logger.error("SNOWFLAKE_HOST not set")
+                return "Error: Configuration issue", []
+            
+            full_url = f"https://{snowflake_host}{self.api_endpoint}"
+            
+            # Set up headers for streaming
+            headers = {
+                "Authorization": f"Bearer {oauth_token}",
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream"  # Important for SSE
+            }
+            
+            logger.info(f"Making streaming request to {full_url}")
+            
+            # Make streaming request
+            response = requests.post(
+                full_url,
+                headers=headers,
+                json=payload,
+                stream=True,  # Enable streaming
+                timeout=60
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Streaming request failed: {response.status_code} - {response.text}")
+                return f"Error: HTTP {response.status_code}", []
+            
+            # Process SSE stream
+            accumulated_text = ""
+            citations = []
+            current_event = None
+            line_count = 0
+            
+            logger.info("Starting to process SSE stream...")
+            
+            for line in response.iter_lines():
+                line_count += 1
+                if not line:
+                    continue
+                    
+                line_str = line.decode('utf-8')
+                
+                # Parse event type
+                if line_str.startswith("event:"):
+                    current_event = line_str[6:].strip()
+                    logger.info(f"SSE event: {current_event}")
+                    
+                elif line_str.startswith("data:"):
+                    data_str = line_str[5:].strip()
+                    if data_str == "[DONE]":
+                        break
+                        
+                    try:
+                        data_obj = json.loads(data_str)
+                        
+                        # Handle text content - according to docs it's "response.text" not "response.text.delta"
+                        if current_event == "response.text":
+                            # The text content is in the data object itself
+                            if "text" in data_obj:
+                                text_fragment = data_obj.get("text", "")
+                                accumulated_text += text_fragment
+                            elif "delta" in data_obj:
+                                text_fragment = data_obj.get("delta", "")
+                                accumulated_text += text_fragment
+                        
+                        # Handle annotations (citations) - as documented
+                        elif current_event == "response.text.annotation":
+                            logger.info(f"Found annotation: {data_obj}")
+                            citations.append(data_obj)
+                        
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"Skipping non-JSON data: {data_str[:100]}")
+            
+            # Clean up text formatting
+            if accumulated_text:
+                # Fix quotation marks
+                accumulated_text = accumulated_text.replace("€™", "'")
+                accumulated_text = accumulated_text.replace("€œ", '"')
+                accumulated_text = accumulated_text.replace("€\x9d", '"')
+                accumulated_text = accumulated_text.replace("€", '"')
+                
+                # Fix citation markers if needed
+                accumulated_text = accumulated_text.replace("ã\x80\x80", "【")
+                accumulated_text = accumulated_text.replace("â\x80", "†")
+                accumulated_text = accumulated_text.replace("ã\x80\x91", "】")
+                accumulated_text = accumulated_text.replace("ã", "")
+                accumulated_text = accumulated_text.replace("â", "")
+            
+            logger.info(f"Processed {line_count} lines from SSE stream")
+            logger.info(f"Streaming complete: {len(accumulated_text)} chars, {len(citations)} citations")
+            return accumulated_text, citations
+            
+        except Exception as e:
+            logger.error(f"Streaming document search failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return f"Error: {str(e)}", []
+    
     def get_citation_content(self, citation: Dict) -> Optional[str]:
         """Retrieve the full content for a citation."""
         
