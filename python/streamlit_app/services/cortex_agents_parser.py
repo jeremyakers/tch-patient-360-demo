@@ -54,11 +54,20 @@ def parse_sse_content(sse_str: str) -> List[Dict]:
         
         if accumulated_text:
             # Clean up the accumulated text - remove weird encoding artifacts
-            # These appear to be citation markers that got garbled in the SSE stream
+            # These appear to be UTF-8 encoding issues in the SSE stream
+            
+            # Fix quotation marks
+            accumulated_text = accumulated_text.replace("€™", "'")  # Smart apostrophe
+            accumulated_text = accumulated_text.replace("€œ", '"')  # Left smart quote
+            accumulated_text = accumulated_text.replace("€\x9d", '"')  # Right smart quote
+            accumulated_text = accumulated_text.replace("€", '"')  # Generic quote cleanup
+            
+            # Fix citation markers
             accumulated_text = accumulated_text.replace("ã\x80\x80", "【")
             accumulated_text = accumulated_text.replace("â\x80", "†")  
             accumulated_text = accumulated_text.replace("ã\x80\x91", "】")
-            # Also clean up standalone garbled characters
+            
+            # Clean up other common artifacts
             accumulated_text = accumulated_text.replace("ã", "")
             accumulated_text = accumulated_text.replace("â", "")
             
