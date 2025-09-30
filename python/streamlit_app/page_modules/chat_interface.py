@@ -219,12 +219,12 @@ def render_chat_interface():
         for idx, message in enumerate(st.session_state.chat_messages):
             # Handle both dict format and ChatMessage objects
             if isinstance(message, dict):
-                with st.chat_message(message['role']):
-                    if message['role'] == 'user':
-                        st.markdown(message['content'])
-                    else:
-                        # Display assistant response
-                        st.markdown(message['content'])
+            with st.chat_message(message['role']):
+                if message['role'] == 'user':
+                    st.markdown(message['content'])
+                else:
+                    # Display assistant response
+                    st.markdown(message['content'])
                     
                     # Note: Thinking steps are now shown in the live streaming box during conversation
                     # No need to duplicate the reasoning process in saved messages
@@ -658,8 +658,8 @@ def _process_user_query(query: str):
             thinking_placeholder = thinking_chat_container.empty()
         
     with response_container:
-        with st.spinner("🤖 Processing your request with AI agents..."):
-            try:
+    with st.spinner("🤖 Processing your request with AI agents..."):
+        try:
                 # Build the payload
                 logger.info(f"DEBUG: Building payload for query: {query}")
                 payload = cortex_agents._build_agent_payload(
@@ -962,31 +962,31 @@ def _process_user_query(query: str):
         
         # Simple error message for user (no debug clutter)
         error_display = f"❌ I encountered an error: {error_msg}"
-        
-        # Add error to chat history
-        st.session_state.chat_messages.append({
-            "role": "assistant",
+                
+                # Add error to chat history
+                st.session_state.chat_messages.append({
+                    "role": "assistant",
             "content": error_display,
-            "error_details": response if response else None
-        })
-        st.rerun()
-        return
-    
+                    "error_details": response if response else None
+                })
+                st.rerun()
+                return
+            
     # Use the streamed response directly
     response_text = final_response
     citations = search_results
-    
-    if not response_text:
-        response_text = "I received your query but couldn't generate a meaningful response. Please try rephrasing your question."
+            
+            if not response_text:
+                response_text = "I received your query but couldn't generate a meaningful response. Please try rephrasing your question."
         logger.warning("CHAT WARNING: Empty response_text from streaming")
-    
+            
     # Execute SQL if present and add results to tables
-    results = None
-    if sql_query:
+            results = None
+            if sql_query:
         logger.info(f"Executing SQL query, tables_data has {len(tables_data)} items")
-        with st.spinner("Executing SQL query..."):
-            try:
-                results = cortex_agents.execute_sql_query(sql_query)
+                with st.spinner("Executing SQL query..."):
+                    try:
+                        results = cortex_agents.execute_sql_query(sql_query)
                 # Always try to add SQL results as a table if we got data
                 if results is not None:
                     try:
@@ -1015,10 +1015,10 @@ def _process_user_query(query: str):
                         logger.error(f"Error converting results to table: {e}")
                 else:
                     logger.warning("SQL query returned None")
-            except Exception as e:
-                logger.error(f"Error executing SQL: {e}")
-                results = None
-    
+                    except Exception as e:
+                        logger.error(f"Error executing SQL: {e}")
+                        results = None
+            
     # Store the complete thinking process as a single step
     if thinking_buffer_for_history:
         thinking_steps = [thinking_buffer_for_history]
@@ -1045,27 +1045,27 @@ def _process_user_query(query: str):
         tables=tables_data,
         charts=charts_data
     )
-    
-    st.session_state.chat_messages.append(assistant_message)
+            
+            st.session_state.chat_messages.append(assistant_message)
     
     # Don't display response here - it's already being displayed by the SSE streaming
     # The streaming handles the real-time response display
-    
-    # Update conversation history for context
-    st.session_state.conversation_history.extend([
-        {
-            "role": "user",
-            "content": [{"type": "text", "text": query}]
-        },
-        {
-            "role": "assistant", 
-            "content": [{"type": "text", "text": response_text}]
-        }
-    ])
-        
-    # Limit conversation history to last 10 exchanges
-    if len(st.session_state.conversation_history) > 20:
-        st.session_state.conversation_history = st.session_state.conversation_history[-20:]
+            
+            # Update conversation history for context
+            st.session_state.conversation_history.extend([
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": query}]
+                },
+                {
+                    "role": "assistant", 
+                    "content": [{"type": "text", "text": response_text}]
+                }
+            ])
+                
+            # Limit conversation history to last 10 exchanges
+            if len(st.session_state.conversation_history) > 20:
+                st.session_state.conversation_history = st.session_state.conversation_history[-20:]
             
     # Don't rerun - let the response display naturally to preserve the thinking box
     # st.rerun()  # Removed to keep thinking box visible

@@ -932,7 +932,6 @@ Always provide context about the data timeframe and any limitations of your anal
         # Build payload specifically for document search (Cortex Search only)
         payload = {
             "model": self.model,
-            "stream": False,  # Disable streaming for document search
             "messages": [
                 {
                     "role": "system", 
@@ -989,92 +988,41 @@ RESPONSE FORMAT:
             logger.info(f"Searching documents for {subject_label} with query: {search_query}")
             logger.info(f"Document search payload: {json.dumps(payload, indent=2)}")
             
-            # Make the API call with longer timeout for document search
-            response = send_snow_api_request(
-                "POST",
-                self.api_endpoint,
-                {"Content-Type": "application/json"},
-                {},
-                payload,
-                None,
-                60000  # 60 seconds for document search
-            )
+            # Import the streaming function
+            from .cortex_agents_sse import send_message_with_streaming
             
-            logger.info(f"Document search response type: {type(response)}")
-            try:
-                logger.info(f"Document search response attributes: {dir(response)}")
-            except Exception:
-                pass
-
-            # Normalize status handling for dict or object responses
-            if isinstance(response, dict) and 'status' in response:
-                status_code = response.get('status')
-                logger.info(f"Document search response status: {status_code}")
-                if status_code != 200:
-                    error_reason = response.get('reason', 'Unknown reason')
-                    error_content = response.get('content', 'No content')
-                    logger.error(f"Document search API error - Status: {status_code}, Reason: {error_reason}")
-                    logger.error(f"Error content: {str(error_content)[:500]}")
-                    return f"Error: HTTP {status_code} - {error_reason}. Content: {str(error_content)[:200]}", []
-            elif hasattr(response, 'status'):
-                logger.info(f"Document search response status: {getattr(response, 'status', None)}")
-                if getattr(response, 'status', None) != 200:
-                    error_reason = getattr(response, 'reason', 'Unknown reason')
-                    error_content = getattr(response, 'content', 'No content')
-                    logger.error(f"Document search API error - Status: {response.status}, Reason: {error_reason}")
-                    logger.error(f"Error content: {error_content}")
-                    return f"Error: HTTP {response.status} - {error_reason}. Content: {str(error_content)[:200]}", []
-
-            # Parse response content (support dict key or object attribute)
-            if isinstance(response, dict) and 'content' in response:
-                content_value = response.get('content')
-                logger.info(f"Document search response content type: {type(content_value)}")
-                logger.info(f"Document search response content (first 500 chars): {str(content_value)[:500]}")
-                # For non-streaming responses, content is already parsed
-                if isinstance(content_value, dict):
-                    response_payload = content_value
-                else:
-                    response_payload = {"content": content_value}
-            elif hasattr(response, 'content'):
-                content_value = getattr(response, 'content')
-                logger.info(f"Document search response content type: {type(content_value)}")
-                logger.info(f"Document search response content (first 500 chars): {str(content_value)[:500]}")
-                # For non-streaming responses, content is already parsed
-                if isinstance(content_value, dict):
-                    response_payload = content_value
-                else:
-                    response_payload = {"content": content_value}
-            else:
-                logger.error("Document search response missing content (neither attribute nor key)")
-                logger.error(f"Response object: {response}")
-                return f"Error: No response content. Response: {str(response)}", []
-
-            try:
-                logger.info("Processing streaming response content...")
-                # Log the raw response for debugging
-                logger.info(f"Raw response_payload type: {type(response_payload)}")
-                if isinstance(response_payload, dict) and 'content' in response_payload:
-                    content = response_payload['content']
-                    logger.info(f"Content type: {type(content)}")
-                    if isinstance(content, str):
-                        logger.info(f"Content string length: {len(content)}")
-                        logger.info(f"First 1000 chars of content: {content[:1000]}")
+            # Use streaming API to collect the complete response
+            accumulated_text = ""
+            citations = []
+            
+            logger.info("Using streaming API for document search")
+            for event in send_message_with_streaming(
+                self.api_endpoint,
+                payload,
+                60000  # 60 seconds timeout
+            ):
+                event_type = event.get("type")
+                logger.debug(f"Document search event: {event_type}")
                 
-                response_text, _, citations, _ = self.process_agent_response(response_payload)
-                logger.info(f"Extracted response_text length: {len(response_text) if response_text else 0}")
-                logger.info(f"Extracted citations count: {len(citations) if citations else 0}")
-
-                if not response_text and not citations:
-                    # Try to provide more helpful error info
-                    logger.error("No meaningful response extracted from agent")
-                    logger.error(f"Raw payload was: {str(response_payload)[:500]}")
-                    return "Error: No meaningful response extracted from agent. Check logs for details.", []
-
-                return response_text, citations
-            except Exception as e:
-                logger.error(f"Failed to process document search response: {e}")
-                logger.error(f"Raw content provided: {str(content_value)[:500]}")
-                return f"Error: Failed to process search results - {str(e)}", []
+                if event_type == "text_delta":
+                    # Accumulate text
+                    accumulated_text += event.get("text", "")
+                
+                elif event_type == "citations":
+                    # Collect citations
+                    citations = event.get("citations", [])
+                
+                elif event_type == "error":
+                    error_msg = event.get("error", "Unknown error")
+                    logger.error(f"Document search error: {error_msg}")
+                    return f"Error: {error_msg}", []
+            
+            logger.info(f"Document search completed - {len(accumulated_text)} chars, {len(citations)} citations")
+            
+            if not accumulated_text:
+                return "No documents found matching your search criteria.", []
+            
+            return accumulated_text, citations
             
         except Exception as e:
             logger.error(f"Document search failed with exception: {e}")
