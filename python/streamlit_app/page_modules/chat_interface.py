@@ -219,13 +219,13 @@ def render_chat_interface():
         for idx, message in enumerate(st.session_state.chat_messages):
             # Handle both dict format and ChatMessage objects
             if isinstance(message, dict):
-                with st.chat_message(message['role']):
-                    if message['role'] == 'user':
-                        st.markdown(message['content'])
-                    else:
-                        # Display assistant response
-                        st.markdown(message['content'])
-                        
+            with st.chat_message(message['role']):
+                if message['role'] == 'user':
+                    st.markdown(message['content'])
+                else:
+                    # Display assistant response
+                    st.markdown(message['content'])
+                    
                     # Note: Thinking steps are now shown in the live streaming box during conversation
                     # No need to duplicate the reasoning process in saved messages
                     
