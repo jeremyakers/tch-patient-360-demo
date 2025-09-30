@@ -14,9 +14,11 @@ def parse_sse_content(sse_str: str) -> List[Dict]:
     """
     Parse SSE (Server-Sent Events) format content into a list of events.
     
-    SSE format looks like:
+    SSE format for Cortex Agents looks like:
     event: message.delta
-    data: {"id":"msg_001","object":"message.delta",...}
+    data: {"id":"msg_001","object":"message.delta","delta":{"content":[{"index":0,"type":"text","text":"fragment"}]}}
+    
+    The API sends many small text fragments that need to be accumulated.
     
     Args:
         sse_str: SSE formatted string
@@ -24,50 +26,48 @@ def parse_sse_content(sse_str: str) -> List[Dict]:
     Returns:
         List of parsed event dictionaries
     """
-    events = []
+    # For document search, we just need to acknowledge that we got a response
+    # The actual content is incomplete streaming data that we can't fully parse
     
-    # Split by event boundaries (could be \n\n or \\n\\n in escaped format)
-    lines = sse_str.replace("\\n", "\n").split("\n")
-    
-    current_event = {}
-    current_data = ""
-    
-    for line in lines:
-        line = line.strip()
+    # Check if this looks like SSE streaming data
+    if "event:" in sse_str and "message.delta" in sse_str:
+        logger.info("Detected SSE streaming response for document search")
         
-        if line.startswith("event:"):
-            # Start of new event
-            if current_data:
-                # Save previous event
+        # Extract any complete text fragments
+        accumulated_text = ""
+        lines = sse_str.replace("\\n", "\n").split("\n")
+        
+        for line in lines:
+            if line.startswith("data:"):
+                data_str = line[5:].strip()
                 try:
-                    data_obj = json.loads(current_data)
-                    if current_event:
-                        current_event["data"] = data_obj
-                        # Wrap in expected format
-                        events.append({"event": "response", "data": {"content": [data_obj]}})
+                    # Try to parse each data line
+                    data_obj = json.loads(data_str)
+                    if "delta" in data_obj and "content" in data_obj["delta"]:
+                        for content_item in data_obj["delta"]["content"]:
+                            if content_item.get("type") == "text":
+                                text_fragment = content_item.get("text", "")
+                                accumulated_text += text_fragment
                 except json.JSONDecodeError:
-                    logger.warning(f"Failed to parse SSE data: {current_data[:200]}")
-                
-            current_event = {"event_type": line[6:].strip()}
-            current_data = ""
-            
-        elif line.startswith("data:"):
-            # Accumulate data
-            current_data += line[5:].strip()
+                    # Skip incomplete JSON fragments
+                    pass
+        
+        if accumulated_text:
+            logger.info(f"Accumulated {len(accumulated_text)} chars of text from SSE stream")
+            # Return as a simple text response
+            return [{
+                "event": "response", 
+                "data": {
+                    "content": [{
+                        "type": "text",
+                        "text": accumulated_text
+                    }]
+                }
+            }]
     
-    # Don't forget the last event
-    if current_data:
-        try:
-            data_obj = json.loads(current_data)
-            if current_event:
-                current_event["data"] = data_obj
-                # Wrap in expected format
-                events.append({"event": "response", "data": {"content": [data_obj]}})
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse final SSE data: {current_data[:200]}")
-    
-    logger.info(f"Parsed {len(events)} events from SSE content")
-    return events
+    # If not SSE or no text found, return empty
+    logger.warning("Could not parse SSE content into meaningful response")
+    return []
 
 def parse_v2_agent_response(response: Dict) -> Tuple[str, Optional[str], List[Dict], List[str]]:
     """

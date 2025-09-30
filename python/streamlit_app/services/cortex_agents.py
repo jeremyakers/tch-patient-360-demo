@@ -932,6 +932,7 @@ Always provide context about the data timeframe and any limitations of your anal
         # Build payload specifically for document search (Cortex Search only)
         payload = {
             "model": self.model,
+            "stream": False,  # Disable streaming for document search
             "messages": [
                 {
                     "role": "system", 
