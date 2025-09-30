@@ -33,9 +33,8 @@ def parse_sse_content(sse_str: str) -> List[Dict]:
     if "event:" in sse_str and "message.delta" in sse_str:
         logger.info("Detected SSE streaming response for document search")
         
-        # Extract any complete text fragments and citations
+        # Extract any complete text fragments
         accumulated_text = ""
-        citations = []
         lines = sse_str.replace("\\n", "\n").split("\n")
         
         for line in lines:
@@ -49,26 +48,22 @@ def parse_sse_content(sse_str: str) -> List[Dict]:
                             if content_item.get("type") == "text":
                                 text_fragment = content_item.get("text", "")
                                 accumulated_text += text_fragment
-                            elif content_item.get("type") == "tool_result":
-                                # Extract citations from tool results
-                                tool_result = content_item.get("tool_result", {})
-                                if "content" in tool_result:
-                                    for result_item in tool_result["content"]:
-                                        if "search_results" in result_item:
-                                            citations.extend(result_item["search_results"])
                 except json.JSONDecodeError:
                     # Skip incomplete JSON fragments
                     pass
         
-        # Clean up the accumulated text - remove weird encoding artifacts
-        # These appear to be citation markers that got garbled
-        accumulated_text = accumulated_text.replace("ã", "【")
-        accumulated_text = accumulated_text.replace("â", "†")
-        accumulated_text = accumulated_text.replace("", "】")
-        
         if accumulated_text:
+            # Clean up the accumulated text - remove weird encoding artifacts
+            # These appear to be citation markers that got garbled in the SSE stream
+            accumulated_text = accumulated_text.replace("ã\x80\x80", "【")
+            accumulated_text = accumulated_text.replace("â\x80", "†")  
+            accumulated_text = accumulated_text.replace("ã\x80\x91", "】")
+            # Also clean up standalone garbled characters
+            accumulated_text = accumulated_text.replace("ã", "")
+            accumulated_text = accumulated_text.replace("â", "")
+            
             logger.info(f"Accumulated {len(accumulated_text)} chars of text from SSE stream")
-            # Return as a simple text response with citations
+            # Return as a simple text response
             return [{
                 "event": "response", 
                 "data": {
@@ -105,17 +100,18 @@ def parse_v2_agent_response(response: Dict) -> Tuple[str, Optional[str], List[Di
         events = []
         if isinstance(content_str, str):
             # Check if it's SSE format (event: ... \ndata: ...)
-            # Only use SSE parser for document search responses (which have incomplete streaming)
+            # SSE format is typically used for document search responses
             if (content_str.startswith("event:") or "\\nevent:" in content_str) and "message.delta" in content_str:
-                logger.info("Parsing SSE format response (document search)")
+                logger.info("Parsing SSE format response (likely document search)")
                 # Parse SSE format into events
-                events = parse_sse_content(content_str)
+                sse_events = parse_sse_content(content_str)
                 # For SSE parsed content, return the accumulated text immediately
-                if events and len(events) > 0:
-                    event = events[0]
+                if sse_events and len(sse_events) > 0:
+                    event = sse_events[0]
                     if "data" in event and "content" in event["data"]:
                         for item in event["data"]["content"]:
                             if item.get("type") == "text":
+                                # Return text with empty SQL, citations, and thinking
                                 return item.get("text", ""), None, [], []
                 return "", None, [], []
             else:
