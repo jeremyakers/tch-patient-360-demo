@@ -1135,9 +1135,16 @@ RESPONSE FORMAT:
                 timeout=60
             )
             
+            logger.info(f"Response status code: {response.status_code}")
+            logger.info(f"Response headers: {response.headers}")
+            
             if response.status_code != 200:
                 logger.error(f"Streaming request failed: {response.status_code} - {response.text}")
                 return f"Error: HTTP {response.status_code}", []
+            
+            # Check if response is actually streaming
+            content_type = response.headers.get('content-type', '')
+            logger.info(f"Content-Type: {content_type}")
             
             # Process SSE stream
             accumulated_text = ""
@@ -1146,6 +1153,7 @@ RESPONSE FORMAT:
             line_count = 0
             
             logger.info("Starting to process SSE stream...")
+            logger.info(f"Response encoding: {response.encoding}")
             
             for line in response.iter_lines():
                 line_count += 1
