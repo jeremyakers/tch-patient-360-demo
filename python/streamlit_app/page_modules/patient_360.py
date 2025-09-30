@@ -777,12 +777,31 @@ def _render_document_search(patient_data: Dict[str, Any], patient_id: str):
                         
                         for idx, citation in enumerate(citations, start=1):
                             # Extract document info from citation
-                            doc_type = citation.get('document_type', 'Document')
-                            doc_date = citation.get('document_date', 'Unknown Date')
-                            doc_id = citation.get('file_path') or citation.get('doc_id', 'N/A')
+                            doc_id = citation.get('doc_id', 'N/A')
+                            doc_title = citation.get('doc_title', 'Document')
                             excerpt = citation.get('text', 'No preview available')
-                            author = citation.get('author', 'N/A')
-                            department = citation.get('department', 'N/A')
+                            
+                            # Parse document type and date from the doc_id or content
+                            doc_type = 'Clinical Note'
+                            doc_date = 'See document'
+                            author = 'N/A'
+                            department = 'N/A'
+                            
+                            # Try to extract info from the text content
+                            if excerpt:
+                                lines = excerpt.split('\n')
+                                for line in lines:
+                                    if 'Date/Time:' in line or 'Date of Service:' in line or 'Date of Consultation:' in line:
+                                        doc_date = line.split(':', 1)[1].strip() if ':' in line else doc_date
+                                    if 'Provider:' in line or 'Nurse:' in line or 'Consultant:' in line:
+                                        author = line.split(':', 1)[1].strip() if ':' in line else author
+                                    if 'NOTE' in line.upper():
+                                        if 'NURSING' in line.upper():
+                                            doc_type = 'Nursing Note'
+                                        elif 'PROGRESS' in line.upper():
+                                            doc_type = 'Progress Note'
+                                        elif 'CONSULTATION' in line.upper():
+                                            doc_type = 'Consultation Note'
                             
                             # Store document info in the same format as before
                             doc_info = {

@@ -1191,6 +1191,30 @@ RESPONSE FORMAT:
                                         text_fragment = content_item.get("text", "")
                                         accumulated_text += text_fragment
                                         logger.debug(f"Added text fragment: {len(text_fragment)} chars")
+                                    
+                                    # Extract tool results which contain the search results
+                                    elif content_item.get("type") == "tool_results":
+                                        tool_results = content_item.get("tool_results", {})
+                                        if tool_results.get("type") == "cortex_search":
+                                            content_list = tool_results.get("content", [])
+                                            for result_item in content_list:
+                                                if result_item.get("type") == "json":
+                                                    json_data = result_item.get("json", {})
+                                                    search_results = json_data.get("searchResults", [])
+                                                    logger.info(f"Found {len(search_results)} search results in tool_results")
+                                                    
+                                                    # Convert search results to citations format
+                                                    for idx, result in enumerate(search_results):
+                                                        citation = {
+                                                            "index": idx + 1,
+                                                            "doc_id": result.get("doc_id", ""),
+                                                            "doc_title": result.get("doc_title", ""),
+                                                            "source_id": result.get("source_id", ""),
+                                                            "text": result.get("text", ""),
+                                                            "file_path": result.get("doc_id", "")  # Use doc_id as file_path
+                                                        }
+                                                        citations.append(citation)
+                                                        logger.debug(f"Added citation {idx + 1}: {citation['doc_id']}")
                         
                         # Handle annotations (citations) - as documented
                         elif current_event == "response.text.annotation":
