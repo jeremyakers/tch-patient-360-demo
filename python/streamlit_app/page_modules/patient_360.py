@@ -737,8 +737,6 @@ def _render_document_search(patient_data: Dict[str, Any], patient_id: str):
                         max_results=max_results
                     )
                     
-                    st.info(f"📋 Agent response received: {len(agent_response) if agent_response else 0} characters")
-                    st.info(f"📄 Citations received: {len(citations) if citations else 0} items")
                     
                     # Display the agent's natural language response
                     if agent_response and not agent_response.startswith("Error:"):
