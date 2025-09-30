@@ -988,7 +988,7 @@ RESPONSE FORMAT:
             logger.info(f"Searching documents for {subject_label} with query: {search_query}")
             logger.info(f"Document search payload: {json.dumps(payload, indent=2)}")
             
-            # Make the API call
+            # Make the API call with longer timeout for document search
             response = send_snow_api_request(
                 "POST",
                 self.api_endpoint,
@@ -996,7 +996,7 @@ RESPONSE FORMAT:
                 {},
                 payload,
                 None,
-                30000
+                60000  # 60 seconds for document search
             )
             
             logger.info(f"Document search response type: {type(response)}")

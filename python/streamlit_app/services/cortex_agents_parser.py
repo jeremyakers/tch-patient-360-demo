@@ -10,6 +10,65 @@ from typing import Dict, List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
+def parse_sse_content(sse_str: str) -> List[Dict]:
+    """
+    Parse SSE (Server-Sent Events) format content into a list of events.
+    
+    SSE format looks like:
+    event: message.delta
+    data: {"id":"msg_001","object":"message.delta",...}
+    
+    Args:
+        sse_str: SSE formatted string
+        
+    Returns:
+        List of parsed event dictionaries
+    """
+    events = []
+    
+    # Split by event boundaries (could be \n\n or \\n\\n in escaped format)
+    lines = sse_str.replace("\\n", "\n").split("\n")
+    
+    current_event = {}
+    current_data = ""
+    
+    for line in lines:
+        line = line.strip()
+        
+        if line.startswith("event:"):
+            # Start of new event
+            if current_data:
+                # Save previous event
+                try:
+                    data_obj = json.loads(current_data)
+                    if current_event:
+                        current_event["data"] = data_obj
+                        # Wrap in expected format
+                        events.append({"event": "response", "data": {"content": [data_obj]}})
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse SSE data: {current_data[:200]}")
+                
+            current_event = {"event_type": line[6:].strip()}
+            current_data = ""
+            
+        elif line.startswith("data:"):
+            # Accumulate data
+            current_data += line[5:].strip()
+    
+    # Don't forget the last event
+    if current_data:
+        try:
+            data_obj = json.loads(current_data)
+            if current_event:
+                current_event["data"] = data_obj
+                # Wrap in expected format
+                events.append({"event": "response", "data": {"content": [data_obj]}})
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse final SSE data: {current_data[:200]}")
+    
+    logger.info(f"Parsed {len(events)} events from SSE content")
+    return events
+
 def parse_v2_agent_response(response: Dict) -> Tuple[str, Optional[str], List[Dict], List[str]]:
     """
     Parse the v2 agent response with its complex nested structure.
@@ -28,14 +87,21 @@ def parse_v2_agent_response(response: Dict) -> Tuple[str, Optional[str], List[Di
         if not content_str:
             return "", None, [], []
             
-        # Parse the JSON events array
+        # Parse the content - could be JSON or SSE format
         events = []
         if isinstance(content_str, str):
-            try:
-                events = json.loads(content_str)
-            except json.JSONDecodeError:
-                logger.error("Failed to parse content as JSON")
-                return "", None, [], []
+            # Check if it's SSE format (event: ... \ndata: ...)
+            if content_str.startswith("event:") or "\\nevent:" in content_str:
+                logger.info("Parsing SSE format response")
+                # Parse SSE format into events
+                events = parse_sse_content(content_str)
+            else:
+                # Try to parse as JSON
+                try:
+                    events = json.loads(content_str)
+                except json.JSONDecodeError:
+                    logger.error("Failed to parse content as JSON")
+                    return "", None, [], []
         elif isinstance(content_str, list):
             events = content_str
             
@@ -70,6 +136,11 @@ def parse_v2_agent_response(response: Dict) -> Tuple[str, Optional[str], List[Di
                         tool_type = tool_use.get("type", "")
                         tool_name = tool_use.get("name", "")
                         logger.debug(f"Tool used: {tool_name} ({tool_type})")
+                        
+                        # For document search, we might get a simple acknowledgment
+                        if tool_name == "cortex_search" or tool_type == "cortex_search":
+                            # This is just the tool being invoked, actual results come in tool_result
+                            response_text = "Searching clinical documents..."
                     
                     # Extract tool results (contains SQL and search results)
                     elif item_type == "tool_result":
