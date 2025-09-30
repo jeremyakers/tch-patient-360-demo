@@ -320,6 +320,14 @@ Always provide context about the data timeframe and any limitations of your anal
     def _build_agent_payload(self, user_message: str, conversation_history: List[Dict], thread_id: str = None) -> Dict:
         """Build the payload for the Cortex Agent API call."""
         
+        # Get max_results from session state if available
+        max_results = 50  # default
+        if st and hasattr(st, 'session_state') and 'cortex_search_max_results' in st.session_state:
+            try:
+                max_results = int(st.session_state['cortex_search_max_results'])
+            except (ValueError, TypeError):
+                max_results = 50
+        
         # Build conversation messages
         messages = []
         
@@ -411,7 +419,7 @@ Always provide context about the data timeframe and any limitations of your anal
             },
             "clinical_notes_search": {
                 "search_service": self.search_services.get('clinical_notes', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH'),
-                "max_results": 50,  # Increase from default of 8
+                "max_results": max_results,  # Use configurable value from sidebar
                 "execution_environment": {
                     "database": self.agent_database,
                     "schema": self.agent_schema,
@@ -420,7 +428,7 @@ Always provide context about the data timeframe and any limitations of your anal
             },
             "radiology_search": {
                 "search_service": self.search_services.get('radiology', 'TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH'),
-                "max_results": 50,  # Increase from default of 8
+                "max_results": max_results,  # Use configurable value from sidebar
                 "execution_environment": {
                     "database": self.agent_database,
                     "schema": self.agent_schema,
@@ -429,7 +437,7 @@ Always provide context about the data timeframe and any limitations of your anal
             },
             "clinical_documentation_search": {
                 "search_service": self.search_services.get('clinical_docs', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_DOCUMENTATION_SEARCH'),
-                "max_results": 50,  # Increase from default of 8
+                "max_results": max_results,  # Use configurable value from sidebar
                 "execution_environment": {
                     "database": self.agent_database,
                     "schema": self.agent_schema,
