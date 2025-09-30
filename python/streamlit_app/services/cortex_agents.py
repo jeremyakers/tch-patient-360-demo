@@ -1186,15 +1186,25 @@ RESPONSE FORMAT:
                         if current_event == "message.delta":
                             # Extract text from delta content
                             if "delta" in data_obj and "content" in data_obj["delta"]:
-                                for content_item in data_obj["delta"]["content"]:
-                                    if content_item.get("type") == "text":
+                                content_items = data_obj["delta"]["content"]
+                                logger.debug(f"Processing {len(content_items)} content items in delta")
+                                for content_item in content_items:
+                                    item_type = content_item.get("type", "unknown")
+                                    logger.debug(f"Content item type: {item_type}")
+                                    
+                                    if item_type == "text":
                                         text_fragment = content_item.get("text", "")
                                         accumulated_text += text_fragment
                                         logger.debug(f"Added text fragment: {len(text_fragment)} chars")
                                     
+                                    # Skip tool_use items
+                                    elif item_type == "tool_use":
+                                        logger.debug(f"Skipping tool_use item")
+                                    
                                     # Extract tool results which contain the search results
-                                    elif content_item.get("type") == "tool_results":
+                                    elif item_type == "tool_results":
                                         tool_results = content_item.get("tool_results", {})
+                                        logger.debug(f"Found tool_results of type: {tool_results.get('type')}")
                                         if tool_results.get("type") == "cortex_search":
                                             content_list = tool_results.get("content", [])
                                             for result_item in content_list:
