@@ -390,6 +390,12 @@ Always provide context about the data timeframe and any limitations of your anal
                     "type": "cortex_search",
                     "name": "radiology_search"
                 }
+            },
+            {
+                "tool_spec": {
+                    "type": "cortex_search",
+                    "name": "clinical_documentation_search"
+                }
             }
         ]
         
@@ -405,6 +411,7 @@ Always provide context about the data timeframe and any limitations of your anal
             },
             "clinical_notes_search": {
                 "search_service": self.search_services.get('clinical_notes', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH'),
+                "max_results": 50,  # Increase from default of 8
                 "execution_environment": {
                     "database": self.agent_database,
                     "schema": self.agent_schema,
@@ -413,6 +420,16 @@ Always provide context about the data timeframe and any limitations of your anal
             },
             "radiology_search": {
                 "search_service": self.search_services.get('radiology', 'TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH'),
+                "max_results": 50,  # Increase from default of 8
+                "execution_environment": {
+                    "database": self.agent_database,
+                    "schema": self.agent_schema,
+                    "warehouse": "TCH_AI_ML_WH"
+                }
+            },
+            "clinical_documentation_search": {
+                "search_service": self.search_services.get('clinical_docs', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_DOCUMENTATION_SEARCH'),
+                "max_results": 50,  # Increase from default of 8
                 "execution_environment": {
                     "database": self.agent_database,
                     "schema": self.agent_schema,
