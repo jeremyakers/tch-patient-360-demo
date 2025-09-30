@@ -443,7 +443,12 @@ Always provide context about the data timeframe and any limitations of your anal
         logger.info("AI Chat tool_resources for search tools:")
         for tool_name in ["clinical_notes_search", "radiology_search", "clinical_documentation_search"]:
             if tool_name in payload["tool_resources"]:
-                logger.info(f"  {tool_name}: max_results = {payload['tool_resources'][tool_name].get('max_results', 'NOT SET')}")
+                tool_config = payload['tool_resources'][tool_name]
+                logger.info(f"  {tool_name}:")
+                logger.info(f"    - name: {tool_config.get('name', 'NOT SET')}")
+                logger.info(f"    - max_results: {tool_config.get('max_results', 'NOT SET')}")
+                logger.info(f"    - id_column: {tool_config.get('id_column', 'NOT SET')}")
+                logger.info(f"    - title_column: {tool_config.get('title_column', 'NOT SET')}")
         
         return payload
     
