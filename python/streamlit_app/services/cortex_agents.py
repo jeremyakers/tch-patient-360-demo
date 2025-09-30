@@ -420,29 +420,20 @@ Always provide context about the data timeframe and any limitations of your anal
             "clinical_notes_search": {
                 "search_service": self.search_services.get('clinical_notes', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH'),
                 "max_results": max_results,  # Use configurable value from sidebar
-                "execution_environment": {
-                    "database": self.agent_database,
-                    "schema": self.agent_schema,
-                    "warehouse": "TCH_AI_ML_WH"
-                }
+                "id_column": "file_path",
+                "title_column": "MRN"
             },
             "radiology_search": {
                 "search_service": self.search_services.get('radiology', 'TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH'),
                 "max_results": max_results,  # Use configurable value from sidebar
-                "execution_environment": {
-                    "database": self.agent_database,
-                    "schema": self.agent_schema,
-                    "warehouse": "TCH_AI_ML_WH"
-                }
+                "id_column": "file_path",
+                "title_column": "MRN"
             },
             "clinical_documentation_search": {
                 "search_service": self.search_services.get('clinical_docs', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_DOCUMENTATION_SEARCH'),
                 "max_results": max_results,  # Use configurable value from sidebar
-                "execution_environment": {
-                    "database": self.agent_database,
-                    "schema": self.agent_schema,
-                    "warehouse": "TCH_AI_ML_WH"
-                }
+                "id_column": "file_path",
+                "title_column": "MRN"
             }
         }
         
