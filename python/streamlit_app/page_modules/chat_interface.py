@@ -96,12 +96,17 @@ def render_chat_interface():
     st.title("🤖 AI Healthcare Assistant")
     st.markdown("Ask questions about patients, cohorts, or clinical data using natural language")
     
-    # Sidebar for testing, conversation and examples
+    # Sidebar for conversation and examples
     with st.sidebar:
-        # Testing section
-        st.subheader("🧪 Testing")
-        if st.button("Test OAuth API Call"):
-            test_oauth_api_call()
+        # Patient context
+        st.subheader("👤 Patient Context")
+        if st.session_state.get('current_patient'):
+            patient = st.session_state.current_patient
+            st.info(f"**{patient.get('full_name', 'Unknown')}**\n"
+                   f"MRN: {patient.get('mrn', 'Unknown')}\n"
+                   f"Age: {patient.get('current_age', 'Unknown')} years")
+        else:
+            st.info("No patient currently selected")
         
         st.markdown("---")
         

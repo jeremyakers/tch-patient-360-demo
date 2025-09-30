@@ -174,13 +174,15 @@ def _send_spcs_api_request(
 def get_current_session():
     """Get the current Snowflake session."""
     if RUNTIME_TYPE == "spcs":
-        # In SPCS, use st.connection instead of direct session access
+        # In SPCS, get the Snowpark session from the connection
         try:
             import streamlit as st
-            return st.connection("snowflake")
+            conn = st.connection("snowflake")
+            # The connection object has a session() method that returns the Snowpark Session
+            return conn.session()
         except Exception as e:
-            logger.error(f"Failed to get SPCS connection: {e}")
-            raise RuntimeError(f"Cannot get Snowflake connection in SPCS: {e}")
+            logger.error(f"Failed to get SPCS session: {e}")
+            raise RuntimeError(f"Cannot get Snowflake session in SPCS: {e}")
     elif RUNTIME_TYPE == "warehouse" and snowpark_context:
         return snowpark_context.get_active_session()
     else:
