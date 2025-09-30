@@ -140,15 +140,76 @@ class CortexAgentsService:
 
         if any(isinstance(a, dict) and a.get('name') == self.agent_name for a in (agents or [])):
             logger.info(f"Persisted Agent exists: {self.agent_name}")
+            # TODO: Check if agent needs updating with new tools configuration
+            # For now, return without updating to avoid breaking existing setup
+            # To update: manually drop the agent in Snowsight and let it recreate
             return
 
         # 2) Create when not found (404)
         # Based on docs, the payload structure for creating an agent
+        # Include tools configuration in the agent definition
         payload = {
             "name": self.agent_name,
             "comment": "Texas Children's Hospital Patient 360 AI Assistant",
             "profile": {
                 "display_name": "TCH Patient 360 Assistant"
+            },
+            "models": {
+                "orchestration": self.model
+            },
+            "tools": [
+                {
+                    "tool_spec": {
+                        "type": "cortex_analyst_text_to_sql",
+                        "name": "healthcare_analyst"
+                    }
+                },
+                {
+                    "tool_spec": {
+                        "type": "cortex_search",
+                        "name": "clinical_notes_search"
+                    }
+                },
+                {
+                    "tool_spec": {
+                        "type": "cortex_search",
+                        "name": "radiology_search"
+                    }
+                },
+                {
+                    "tool_spec": {
+                        "type": "cortex_search",
+                        "name": "clinical_documentation_search"
+                    }
+                }
+            ],
+            "tool_resources": {
+                "healthcare_analyst": {
+                    "semantic_model_file": self.semantic_model_file_chat,
+                    "execution_environment": {
+                        "database": self.agent_database,
+                        "schema": self.agent_schema,
+                        "warehouse": "TCH_AI_ML_WH"
+                    }
+                },
+                "clinical_notes_search": {
+                    "name": self.search_services.get('clinical_notes', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH'),
+                    "max_results": 50,  # Default max for AI Chat
+                    "id_column": "file_path",
+                    "title_column": "MRN"
+                },
+                "radiology_search": {
+                    "name": self.search_services.get('radiology', 'TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH'),
+                    "max_results": 50,  # Default max for AI Chat
+                    "id_column": "file_path",
+                    "title_column": "MRN"
+                },
+                "clinical_documentation_search": {
+                    "name": self.search_services.get('clinical_docs', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_DOCUMENTATION_SEARCH'),
+                    "max_results": 50,  # Default max for AI Chat
+                    "id_column": "file_path",
+                    "title_column": "MRN"
+                }
             }
         }
         create_resp = send_snow_api_request(
@@ -359,8 +420,8 @@ Always provide context about the data timeframe and any limitations of your anal
             ]
         })
         
-        # Build payload for non-persisted agent endpoint (agent:run)
-        # When using agent:run, we need to include the agent reference in payload
+        # Build payload for persisted agent endpoint (agent:run)
+        # When using agent:run with a persisted agent, reference it
         payload = {
             "messages": messages,
             # Reference the persisted agent (fully qualified)
@@ -368,10 +429,6 @@ Always provide context about the data timeframe and any limitations of your anal
                 "database": self.agent_database,
                 "schema": self.agent_schema,
                 "name": self.agent_name
-            },
-            # Model specification
-            "models": {
-                "orchestration": self.model
             },
             # Enable streaming for SSE
             "stream": True
@@ -381,7 +438,9 @@ Always provide context about the data timeframe and any limitations of your anal
         if thread_id is not None:
             payload["thread_id"] = thread_id
             
-        # Tools configuration for v2 API
+        # Runtime tools configuration
+        # Note: The agent already has tools configured at creation time,
+        # but we include them here to potentially override settings like max_results
         payload["tools"] = [
             {
                 "tool_spec": {
