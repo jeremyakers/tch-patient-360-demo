@@ -1175,15 +1175,15 @@ RESPONSE FORMAT:
                     try:
                         data_obj = json.loads(data_str)
                         
-                        # Handle text content - according to docs it's "response.text" not "response.text.delta"
-                        if current_event == "response.text":
-                            # The text content is in the data object itself
-                            if "text" in data_obj:
-                                text_fragment = data_obj.get("text", "")
-                                accumulated_text += text_fragment
-                            elif "delta" in data_obj:
-                                text_fragment = data_obj.get("delta", "")
-                                accumulated_text += text_fragment
+                        # Handle text content from message.delta events (what we're actually receiving)
+                        if current_event == "message.delta":
+                            # Extract text from delta content
+                            if "delta" in data_obj and "content" in data_obj["delta"]:
+                                for content_item in data_obj["delta"]["content"]:
+                                    if content_item.get("type") == "text":
+                                        text_fragment = content_item.get("text", "")
+                                        accumulated_text += text_fragment
+                                        logger.debug(f"Added text fragment: {len(text_fragment)} chars")
                         
                         # Handle annotations (citations) - as documented
                         elif current_event == "response.text.annotation":
