@@ -1155,12 +1155,19 @@ RESPONSE FORMAT:
             logger.info("Starting to process SSE stream...")
             logger.info(f"Response encoding: {response.encoding}")
             
+            # Capture raw response for debugging
+            raw_events = []
+            
             for line in response.iter_lines():
                 line_count += 1
                 if not line:
                     continue
                     
                 line_str = line.decode('utf-8')
+                
+                # Capture raw event for debugging
+                if line_str.strip():
+                    raw_events.append(line_str)
                 
                 # Parse event type
                 if line_str.startswith("event:"):
@@ -1190,6 +1197,15 @@ RESPONSE FORMAT:
                             logger.info(f"Found annotation: {data_obj}")
                             citations.append(data_obj)
                         
+                        # Also check for tool results which might contain search results
+                        elif current_event == "message.delta" and "delta" in data_obj:
+                            if "tool_calls" in data_obj["delta"]:
+                                logger.debug(f"Found tool_calls in delta: {data_obj['delta']['tool_calls']}")
+                        
+                        # Log execution trace which might contain citations
+                        elif current_event == "execution_trace":
+                            logger.debug(f"Execution trace: {json.dumps(data_obj)[:200]}...")
+                        
                     except json.JSONDecodeError as e:
                         logger.debug(f"Skipping non-JSON data: {data_str[:100]}")
             
@@ -1208,8 +1224,19 @@ RESPONSE FORMAT:
                 accumulated_text = accumulated_text.replace("ã", "")
                 accumulated_text = accumulated_text.replace("â", "")
             
+            # Log the complete raw response for debugging
             logger.info(f"Processed {line_count} lines from SSE stream")
             logger.info(f"Streaming complete: {len(accumulated_text)} chars, {len(citations)} citations")
+            
+            # Write raw events to telemetry for debugging
+            logger.info("=== RAW SSE RESPONSE START ===")
+            for i, event in enumerate(raw_events[:50]):  # First 50 events
+                logger.info(f"Event {i}: {event}")
+            if len(raw_events) > 50:
+                logger.info(f"... and {len(raw_events) - 50} more events")
+            logger.info("=== RAW SSE RESPONSE END ===")
+            
+            # Also return raw events for UI debugging
             return accumulated_text, citations
             
         except Exception as e:

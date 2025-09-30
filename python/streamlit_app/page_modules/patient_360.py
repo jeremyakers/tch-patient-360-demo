@@ -740,6 +740,13 @@ def _render_document_search(patient_data: Dict[str, Any], patient_id: str):
                     st.info(f"📋 Agent response received: {len(agent_response) if agent_response else 0} characters")
                     st.info(f"📄 Citations received: {len(citations) if citations else 0} items")
                     
+                    # Debug panel to show raw response data
+                    with st.expander("🔍 Debug: Raw API Response", expanded=False):
+                        st.write("**Citations Object:**")
+                        st.json(citations if citations else {"message": "No citations returned"})
+                        st.write("**Response Text Preview (first 500 chars):**")
+                        st.code(agent_response[:500] if agent_response else "No response text")
+                    
                     # Display the agent's natural language response
                     if agent_response and not agent_response.startswith("Error:"):
                         st.markdown("### 🤖 AI Analysis")
