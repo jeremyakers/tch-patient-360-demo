@@ -193,25 +193,26 @@ class CortexAgentsService:
                     }
                 },
                 "clinical_notes_search": {
-                    "name": self.search_services.get('clinical_notes', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH'),
-                    "max_results": 50,  # Default max for AI Chat
+                    "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('clinical_notes', 'CLINICAL_NOTES_SEARCH')}",
+                    "title_column": "MRN",
                     "id_column": "file_path",
-                    "title_column": "MRN"
+                    "filter": {}  # No default filter at agent level
                 },
                 "radiology_search": {
-                    "name": self.search_services.get('radiology', 'TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH'),
-                    "max_results": 50,  # Default max for AI Chat
+                    "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('radiology', 'RADIOLOGY_REPORTS_SEARCH')}",
+                    "title_column": "MRN",
                     "id_column": "file_path",
-                    "title_column": "MRN"
+                    "filter": {}  # No default filter at agent level
                 },
                 "clinical_documentation_search": {
-                    "name": self.search_services.get('clinical_docs', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_DOCUMENTATION_SEARCH'),
-                    "max_results": 50,  # Default max for AI Chat
+                    "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('clinical_docs', 'CLINICAL_DOCUMENTATION_SEARCH')}",
+                    "title_column": "MRN",
                     "id_column": "file_path",
-                    "title_column": "MRN"
+                    "filter": {}  # No default filter at agent level
                 }
             }
         }
+        logger.info(f"Creating agent with payload: {json.dumps(payload, indent=2)}")
         create_resp = send_snow_api_request(
             "POST",
             self.agents_admin_endpoint,
@@ -221,6 +222,8 @@ class CortexAgentsService:
             None,
             25000
         )
+        logger.info(f"Agent creation response status: {getattr(create_resp, 'status', 'NO STATUS')}")
+        logger.info(f"Agent creation response: {getattr(create_resp, 'content', 'NO CONTENT')[:500]}")
         # Require explicit status for create; if missing, verify via LIST and surface full context on failure
         if not hasattr(create_resp, 'status'):
             # Verify existence immediately
@@ -479,22 +482,22 @@ Always provide context about the data timeframe and any limitations of your anal
                 }
             },
             "clinical_notes_search": {
-                "name": self.search_services.get('clinical_notes', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH'),
-                "max_results": max_results,  # Use configurable value from sidebar
+                "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('clinical_notes', 'CLINICAL_NOTES_SEARCH')}",
+                "title_column": "MRN",
                 "id_column": "file_path",
-                "title_column": "MRN"
+                "filter": {}  # Empty filter allows searching all documents
             },
             "radiology_search": {
-                "name": self.search_services.get('radiology', 'TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH'),
-                "max_results": max_results,  # Use configurable value from sidebar
+                "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('radiology', 'RADIOLOGY_REPORTS_SEARCH')}",
+                "title_column": "MRN",
                 "id_column": "file_path",
-                "title_column": "MRN"
+                "filter": {}  # Empty filter allows searching all documents
             },
             "clinical_documentation_search": {
-                "name": self.search_services.get('clinical_docs', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_DOCUMENTATION_SEARCH'),
-                "max_results": max_results,  # Use configurable value from sidebar
+                "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('clinical_docs', 'CLINICAL_DOCUMENTATION_SEARCH')}",
+                "title_column": "MRN",
                 "id_column": "file_path",
-                "title_column": "MRN"
+                "filter": {}  # Empty filter allows searching all documents
             }
         }
         
@@ -504,10 +507,10 @@ Always provide context about the data timeframe and any limitations of your anal
             if tool_name in payload["tool_resources"]:
                 tool_config = payload['tool_resources'][tool_name]
                 logger.info(f"  {tool_name}:")
-                logger.info(f"    - name: {tool_config.get('name', 'NOT SET')}")
-                logger.info(f"    - max_results: {tool_config.get('max_results', 'NOT SET')}")
+                logger.info(f"    - search_service: {tool_config.get('search_service', 'NOT SET')}")
                 logger.info(f"    - id_column: {tool_config.get('id_column', 'NOT SET')}")
                 logger.info(f"    - title_column: {tool_config.get('title_column', 'NOT SET')}")
+                logger.info(f"    - filter: {tool_config.get('filter', 'NOT SET')}")
         
         return payload
     
