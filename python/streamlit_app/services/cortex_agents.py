@@ -1143,8 +1143,12 @@ RESPONSE FORMAT:
             accumulated_text = ""
             citations = []
             current_event = None
+            line_count = 0
+            
+            logger.info("Starting to process SSE stream...")
             
             for line in response.iter_lines():
+                line_count += 1
                 if not line:
                     continue
                     
@@ -1153,7 +1157,7 @@ RESPONSE FORMAT:
                 # Parse event type
                 if line_str.startswith("event:"):
                     current_event = line_str[6:].strip()
-                    logger.debug(f"SSE event: {current_event}")
+                    logger.info(f"SSE event: {current_event}")
                     
                 elif line_str.startswith("data:"):
                     data_str = line_str[5:].strip()
@@ -1196,6 +1200,7 @@ RESPONSE FORMAT:
                 accumulated_text = accumulated_text.replace("ã", "")
                 accumulated_text = accumulated_text.replace("â", "")
             
+            logger.info(f"Processed {line_count} lines from SSE stream")
             logger.info(f"Streaming complete: {len(accumulated_text)} chars, {len(citations)} citations")
             return accumulated_text, citations
             
