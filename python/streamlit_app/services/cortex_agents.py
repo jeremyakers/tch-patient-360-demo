@@ -328,6 +328,8 @@ Always provide context about the data timeframe and any limitations of your anal
             except (ValueError, TypeError):
                 max_results = 50
         
+        logger.info(f"AI Chat: Using max_results = {max_results} for Cortex Search tools")
+        
         # Build conversation messages
         messages = []
         
@@ -418,24 +420,30 @@ Always provide context about the data timeframe and any limitations of your anal
                 }
             },
             "clinical_notes_search": {
-                "search_service": self.search_services.get('clinical_notes', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH'),
+                "name": self.search_services.get('clinical_notes', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH'),
                 "max_results": max_results,  # Use configurable value from sidebar
                 "id_column": "file_path",
                 "title_column": "MRN"
             },
             "radiology_search": {
-                "search_service": self.search_services.get('radiology', 'TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH'),
+                "name": self.search_services.get('radiology', 'TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH'),
                 "max_results": max_results,  # Use configurable value from sidebar
                 "id_column": "file_path",
                 "title_column": "MRN"
             },
             "clinical_documentation_search": {
-                "search_service": self.search_services.get('clinical_docs', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_DOCUMENTATION_SEARCH'),
+                "name": self.search_services.get('clinical_docs', 'TCH_PATIENT_360_POC.AI_ML.CLINICAL_DOCUMENTATION_SEARCH'),
                 "max_results": max_results,  # Use configurable value from sidebar
                 "id_column": "file_path",
                 "title_column": "MRN"
             }
         }
+        
+        # Log the search tool configurations for debugging
+        logger.info("AI Chat tool_resources for search tools:")
+        for tool_name in ["clinical_notes_search", "radiology_search", "clinical_documentation_search"]:
+            if tool_name in payload["tool_resources"]:
+                logger.info(f"  {tool_name}: max_results = {payload['tool_resources'][tool_name].get('max_results', 'NOT SET')}")
         
         return payload
     
