@@ -1008,7 +1008,7 @@ RESPONSE FORMAT:
 
             try:
                 logger.info("Processing streaming response content...")
-                response_text, _, citations = self.process_agent_response(response_payload)
+                response_text, _, citations, _ = self.process_agent_response(response_payload)
                 logger.info(f"Extracted response_text length: {len(response_text) if response_text else 0}")
                 logger.info(f"Extracted citations count: {len(citations) if citations else 0}")
 
