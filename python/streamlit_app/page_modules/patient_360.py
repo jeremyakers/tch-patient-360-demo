@@ -775,25 +775,42 @@ def _render_document_search(patient_data: Dict[str, Any], patient_id: str):
                     if citations:
                         st.success(f"Found {len(citations)} relevant documents")
                         
+                        # Extract document IDs for batch metadata extraction
+                        doc_ids = [citation.get('doc_id', '') for citation in citations if citation.get('doc_id')]
+                        
+                        # Use AI to extract author and department information
+                        metadata_dict = {}
+                        if doc_ids:
+                            try:
+                                with st.spinner("Extracting document metadata using AI..."):
+                                    metadata_dict = cortex_search.batch_extract_document_metadata(doc_ids)
+                            except Exception as e:
+                                logger.warning(f"Failed to extract metadata: {e}")
+                                metadata_dict = {}
+                        
                         for idx, citation in enumerate(citations, start=1):
                             # Extract document info from citation
                             doc_id = citation.get('doc_id', 'N/A')
                             doc_title = citation.get('doc_title', 'Document')
-                            excerpt = citation.get('text', 'No preview available')
+                            excerpt = citation.get('text', 'No preview available')  # This is just the relevant snippet
                             
                             # Parse document type and date from the doc_id or content
                             doc_type = 'Clinical Note'
                             doc_date = 'See document'
-                            author = 'N/A'
-                            department = 'N/A'
                             
-                            # Try to extract info from the text content
+                            # Get AI-extracted metadata
+                            doc_metadata = metadata_dict.get(doc_id, {})
+                            author = doc_metadata.get('author', 'N/A')
+                            department = doc_metadata.get('department', 'N/A')
+                            
+                            # Try to extract additional info from the text snippet
                             if excerpt:
                                 lines = excerpt.split('\n')
                                 for line in lines:
                                     if 'Date/Time:' in line or 'Date of Service:' in line or 'Date of Consultation:' in line:
                                         doc_date = line.split(':', 1)[1].strip() if ':' in line else doc_date
-                                    if 'Provider:' in line or 'Nurse:' in line or 'Consultant:' in line:
+                                    # Fallback if AI extraction didn't work
+                                    if author == 'N/A' and ('Provider:' in line or 'Nurse:' in line or 'Consultant:' in line):
                                         author = line.split(':', 1)[1].strip() if ':' in line else author
                                     if 'NOTE' in line.upper():
                                         if 'NURSING' in line.upper():
@@ -803,12 +820,16 @@ def _render_document_search(patient_data: Dict[str, Any], patient_id: str):
                                         elif 'CONSULTATION' in line.upper():
                                             doc_type = 'Consultation Note'
                             
+                            # Extract filename from doc_id for display
+                            filename = doc_id.split('/')[-1] if '/' in doc_id else doc_id
+                            
                             # Store document info in the same format as before
                             doc_info = {
                                 'idx': idx,
                                 'doc_type': doc_type,
                                 'doc_date': doc_date,
                                 'doc_id': doc_id,
+                                'filename': filename,
                                 'excerpt': excerpt,
                                 'author': author,
                                 'department': department
@@ -880,6 +901,7 @@ def _render_document_search(patient_data: Dict[str, Any], patient_id: str):
                         doc_type = doc_info['doc_type']
                         doc_date = doc_info['doc_date']
                         doc_id = doc_info['doc_id']
+                        filename = doc_info.get('filename', doc_id)
                         excerpt = doc_info['excerpt']
                         author = doc_info['author']
                         department = doc_info['department']
@@ -892,9 +914,14 @@ def _render_document_search(patient_data: Dict[str, Any], patient_id: str):
                             f"📄 [{idx}] {doc_type} - {doc_date}",
                             expanded=is_viewing_document
                         ):
-                            st.write(f"**Author:** {author}")
-                            st.write(f"**Department:** {department}")
-                            st.write(f"**File Path:** {doc_id}")
+                            # Display metadata in columns for better layout
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write(f"**Author:** {author}")
+                                st.write(f"**Department:** {department}")
+                            with col2:
+                                st.write(f"**Filename:** `{filename}`")
+                                st.write(f"**Full Path:** `{doc_id}`")
                             
                             # Document excerpt from search results
                             if excerpt and excerpt != 'No preview available':
