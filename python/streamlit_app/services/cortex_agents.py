@@ -215,6 +215,14 @@ class CortexAgentsService:
                 }
             }
         }
+        
+        # Print the full payload to console for debugging
+        print("\n" + "="*80)
+        print("AGENT CREATION PAYLOAD:")
+        print("="*80)
+        print(json.dumps(payload, indent=2))
+        print("="*80 + "\n")
+        
         logger.info(f"Creating agent with payload: {json.dumps(payload, indent=2)}")
         create_resp = send_snow_api_request(
             "POST",
@@ -225,6 +233,15 @@ class CortexAgentsService:
             None,
             25000
         )
+        
+        # Print the response for debugging
+        print("\n" + "="*80)
+        print("AGENT CREATION RESPONSE:")
+        print("="*80)
+        print(f"Status: {getattr(create_resp, 'status', 'NO STATUS')}")
+        print(f"Content: {getattr(create_resp, 'content', 'NO CONTENT')}")
+        print("="*80 + "\n")
+        
         logger.info(f"Agent creation response status: {getattr(create_resp, 'status', 'NO STATUS')}")
         logger.info(f"Agent creation response: {getattr(create_resp, 'content', 'NO CONTENT')[:500]}")
         # Require explicit status for create; if missing, verify via LIST and surface full context on failure
