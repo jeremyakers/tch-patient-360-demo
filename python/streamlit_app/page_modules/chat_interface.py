@@ -130,7 +130,8 @@ def render_chat_interface():
         ]
         
         for i, example in enumerate(example_queries):
-            if st.button(f"📌 {example[:40]}...", key=f"example_{i}"):
+            # Use full text in button, let Streamlit handle wrapping
+            if st.button(f"📌 {example}", key=f"example_{i}", use_container_width=True):
                 st.session_state.example_query = example
                 st.rerun()
 
