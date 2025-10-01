@@ -220,19 +220,22 @@ class CortexAgentsService:
                     }
                 },
                 "clinical_notes_search": {
-                    "search_service": self.search_services.get('clinical_notes', f'{self.agent_database}.{self.agent_schema}.CLINICAL_NOTES_SEARCH'),
+                    "name": self.search_services.get('clinical_notes', f'{self.agent_database}.{self.agent_schema}.CLINICAL_NOTES_SEARCH'),
+                    "max_results": 50,
                     "id_column": "file_path",
                     "title_column": "MRN",
                     "filter": {}  # No default filter at agent level
                 },
                 "radiology_search": {
-                    "search_service": self.search_services.get('radiology', f'{self.agent_database}.{self.agent_schema}.RADIOLOGY_REPORTS_SEARCH'),
+                    "name": self.search_services.get('radiology', f'{self.agent_database}.{self.agent_schema}.RADIOLOGY_REPORTS_SEARCH'),
+                    "max_results": 50,
                     "id_column": "file_path",
                     "title_column": "MRN",
                     "filter": {}  # No default filter at agent level
                 },
                 "clinical_documentation_search": {
-                    "search_service": self.search_services.get('clinical_docs', f'{self.agent_database}.{self.agent_schema}.CLINICAL_DOCUMENTATION_SEARCH'),
+                    "name": self.search_services.get('clinical_docs', f'{self.agent_database}.{self.agent_schema}.CLINICAL_DOCUMENTATION_SEARCH'),
+                    "max_results": 50,
                     "id_column": "file_path",
                     "title_column": "MRN",
                     "filter": {}  # No default filter at agent level
@@ -526,19 +529,22 @@ Always provide context about the data timeframe and any limitations of your anal
                 }
             },
             "clinical_notes_search": {
-                "search_service": self.search_services.get('clinical_notes', f'{self.agent_database}.{self.agent_schema}.CLINICAL_NOTES_SEARCH'),
+                "name": self.search_services.get('clinical_notes', f'{self.agent_database}.{self.agent_schema}.CLINICAL_NOTES_SEARCH'),
+                "max_results": 50,  # Use fixed value of 50 for now
                 "id_column": "file_path",
                 "title_column": "MRN",
                 "filter": {}  # Empty filter allows searching all documents
             },
             "radiology_search": {
-                "search_service": self.search_services.get('radiology', f'{self.agent_database}.{self.agent_schema}.RADIOLOGY_REPORTS_SEARCH'),
+                "name": self.search_services.get('radiology', f'{self.agent_database}.{self.agent_schema}.RADIOLOGY_REPORTS_SEARCH'),
+                "max_results": 50,  # Use fixed value of 50 for now
                 "id_column": "file_path",
                 "title_column": "MRN",
                 "filter": {}  # Empty filter allows searching all documents
             },
             "clinical_documentation_search": {
-                "search_service": self.search_services.get('clinical_docs', f'{self.agent_database}.{self.agent_schema}.CLINICAL_DOCUMENTATION_SEARCH'),
+                "name": self.search_services.get('clinical_docs', f'{self.agent_database}.{self.agent_schema}.CLINICAL_DOCUMENTATION_SEARCH'),
+                "max_results": 50,  # Use fixed value of 50 for now
                 "id_column": "file_path",
                 "title_column": "MRN",
                 "filter": {}  # Empty filter allows searching all documents
@@ -551,7 +557,8 @@ Always provide context about the data timeframe and any limitations of your anal
             if tool_name in payload["tool_resources"]:
                 tool_config = payload['tool_resources'][tool_name]
                 logger.info(f"  {tool_name}:")
-                logger.info(f"    - search_service: {tool_config.get('search_service', 'NOT SET')}")
+                logger.info(f"    - name: {tool_config.get('name', 'NOT SET')}")
+                logger.info(f"    - max_results: {tool_config.get('max_results', 'NOT SET')}")
                 logger.info(f"    - id_column: {tool_config.get('id_column', 'NOT SET')}")
                 logger.info(f"    - title_column: {tool_config.get('title_column', 'NOT SET')}")
                 logger.info(f"    - filter: {tool_config.get('filter', 'NOT SET')}")
