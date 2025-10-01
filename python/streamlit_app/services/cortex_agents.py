@@ -140,9 +140,37 @@ class CortexAgentsService:
 
         if any(isinstance(a, dict) and a.get('name') == self.agent_name for a in (agents or [])):
             logger.info(f"Persisted Agent exists: {self.agent_name}")
-            # TODO: Check if agent needs updating with new tools configuration
-            # For now, return without updating to avoid breaking existing setup
-            # To update: manually drop the agent in Snowsight and let it recreate
+            
+            # Describe the agent to check its current configuration
+            describe_endpoint = f"{self.agents_admin_endpoint}/{self.agent_name}"
+            logger.info(f"Describing agent to check configuration: {describe_endpoint}")
+            
+            describe_resp = send_snow_api_request(
+                "GET",
+                describe_endpoint,
+                {"Content-Type": "application/json"},
+                {},
+                None,
+                None,
+                25000
+            )
+            
+            # Print what the agent currently has configured
+            print("\n" + "="*80)
+            print("CURRENT AGENT CONFIGURATION:")
+            print("="*80)
+            if hasattr(describe_resp, 'content'):
+                import json
+                try:
+                    agent_config = json.loads(describe_resp.content if isinstance(describe_resp.content, str) else describe_resp.content.decode('utf-8'))
+                    print(json.dumps(agent_config, indent=2))
+                except Exception as e:
+                    print(f"Could not parse agent config: {e}")
+                    print(f"Raw content: {describe_resp.content}")
+            print("="*80 + "\n")
+            
+            # For now, just log and return - user will need to manually drop/recreate
+            logger.warning("Agent exists but may need updating. Please drop and recreate if tools are not configured correctly.")
             return
 
         # 2) Create when not found (404)
