@@ -245,7 +245,12 @@ class CortexAgentsService:
         print("="*80 + "\n")
         
         logger.info(f"Agent creation response status: {getattr(create_resp, 'status', 'NO STATUS')}")
-        logger.info(f"Agent creation response: {getattr(create_resp, 'content', 'NO CONTENT')[:500]}")
+        response_content = getattr(create_resp, 'content', 'NO CONTENT')
+        if isinstance(response_content, bytes):
+            response_content = response_content.decode('utf-8')
+        if isinstance(response_content, str) and len(response_content) > 500:
+            response_content = response_content[:500]
+        logger.info(f"Agent creation response: {response_content}")
         # Require explicit status for create; if missing, verify via LIST and surface full context on failure
         if not hasattr(create_resp, 'status'):
             # Verify existence immediately
