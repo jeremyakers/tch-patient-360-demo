@@ -44,21 +44,18 @@
     },
     "clinical_notes_search": {
       "search_service": "TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH",
-      "max_results": 50,
       "id_column": "file_path",
       "title_column": "MRN",
       "filter": {}
     },
     "radiology_search": {
       "search_service": "TCH_PATIENT_360_POC.AI_ML.RADIOLOGY_REPORTS_SEARCH",
-      "max_results": 50,
       "id_column": "file_path",
       "title_column": "MRN",
       "filter": {}
     },
     "clinical_documentation_search": {
       "search_service": "TCH_PATIENT_360_POC.AI_ML.CLINICAL_DOCUMENTATION_SEARCH",
-      "max_results": 50,
       "id_column": "file_path",
       "title_column": "MRN",
       "filter": {}

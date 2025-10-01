@@ -34,12 +34,13 @@ Key fields in `tool_resources`:
 ```json
 "clinical_notes_search": {
   "search_service": "TCH_PATIENT_360_POC.AI_ML.CLINICAL_NOTES_SEARCH",
-  "max_results": 50,
   "id_column": "file_path",
   "title_column": "MRN",
   "filter": {}
 }
 ```
+
+**Note:** `max_results` was initially included but removed as it's not documented in the API schema. Removing it did NOT fix the `<nil>` issue.
 
 **Response:**
 ```json
@@ -74,38 +75,46 @@ Send a query to the agent that triggers Cortex Search:
 
 **Expected:**
 - Agent uses cortex_search tool
-- Returns up to 50 results (as configured in max_results)
+- Returns results using the configured search service
 
 **Actual:**
 - Agent uses cortex_search tool
-- Returns exactly 10 results (ignoring max_results=50 configuration)
+- Returns exactly 10 results (appears to use default limit)
 - Agent thinking says: "✅ Found 10 search results"
+- Search services are not properly attached (show as `<nil>` in UI)
 
 ## Evidence
 
-1. **API Request Logs**: Confirmed payload contains correct `search_service` with fully qualified names and `max_results: 50`
+1. **API Request Logs**: Confirmed payload contains correct `search_service` with fully qualified names
 2. **API Response**: Returns 200 OK with "successfully created" message
-3. **Snowsight UI**: Shows `<nil>` for service names
-4. **Runtime Behavior**: Always returns 10 results regardless of max_results setting
+3. **Snowsight UI**: Shows `<nil>` for service names (even after removing `max_results`)
+4. **Runtime Behavior**: Always returns 10 results (default limit)
+5. **Configuration Variations Tested**:
+   - With `max_results: 50` → `<nil>` services, 10 results
+   - Without `max_results` (matching API docs) → `<nil>` services, 10 results
 
 ## Expected Behavior
 
 1. Cortex Search services should be properly attached to the agent
-2. Service names should display correctly in Snowsight UI
-3. `max_results` parameter should be honored at runtime
-4. Agent should return up to 50 results when configured with `max_results: 50`
+2. Service names should display correctly in Snowsight UI (not `<nil>`)
+3. Agent should be able to use the configured search services at runtime
 
 ## Suspected Root Cause
 
 The Cortex Agents REST API appears to:
-1. Accept the `tool_resources` configuration without error
-2. Not properly persist the Cortex Search tool configurations
-3. Fall back to a default `max_results` value of 10
+1. Accept the `tool_resources` configuration for Cortex Search without error
+2. Return 200 OK "successfully created"
+3. **But NOT properly persist the Cortex Search tool configurations**
+4. The search services show as `<nil>` in Snowsight UI
+5. Runtime behavior falls back to default limits (10 results)
+
+This persists **even when the payload exactly matches the documented schema** (without `max_results`).
 
 This suggests either:
-- A bug in the agent creation endpoint that silently ignores Cortex Search tool_resources
-- A limitation in the current API version where Cortex Search tools cannot be pre-configured on persisted agents
-- A mismatch between the documented API schema and actual implementation
+- A bug in the agent creation endpoint that silently ignores Cortex Search `tool_resources`
+- A limitation where Cortex Search tools cannot be pre-configured on persisted agents via REST API
+- The API may only support Cortex Analyst in `tool_resources`, not Cortex Search
+- A mismatch between Snowsight UI capabilities and REST API capabilities
 
 ## Related Documentation
 
@@ -120,8 +129,10 @@ Note: Documentation does NOT mention `max_results` as a valid field, but the Sno
 
 ## Questions for Support
 
-1. Is `max_results` a supported parameter for Cortex Search in `tool_resources` at agent creation time?
-2. Why does the API accept the payload but the services show as `<nil>` in the UI?
+1. Is it possible to configure Cortex Search services in `tool_resources` when creating an agent via REST API?
+2. Why does the API return 200 "successfully created" but the services show as `<nil>` in Snowsight?
 3. Is there a different API endpoint or method required to attach Cortex Search services to a persisted agent?
-4. Should `max_results` be configured at agent creation time or passed at runtime in each request?
+4. Are Cortex Search tools only configurable via Snowsight UI, not REST API?
+5. If REST API configuration is supported, what is the correct payload structure?
+6. Is there a way to verify/describe the agent's actual stored configuration via REST API?
 
