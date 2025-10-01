@@ -193,21 +193,21 @@ class CortexAgentsService:
                     }
                 },
                 "clinical_notes_search": {
-                    "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('clinical_notes', 'CLINICAL_NOTES_SEARCH')}",
+                    "search_service": self.search_services.get('clinical_notes', 'CLINICAL_NOTES_SEARCH'),
                     "max_results": 50,
                     "id_column": "file_path",
                     "title_column": "MRN",
                     "filter": {}  # No default filter at agent level
                 },
                 "radiology_search": {
-                    "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('radiology', 'RADIOLOGY_REPORTS_SEARCH')}",
+                    "search_service": self.search_services.get('radiology', 'RADIOLOGY_REPORTS_SEARCH'),
                     "max_results": 50,
                     "id_column": "file_path",
                     "title_column": "MRN",
                     "filter": {}  # No default filter at agent level
                 },
                 "clinical_documentation_search": {
-                    "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('clinical_docs', 'CLINICAL_DOCUMENTATION_SEARCH')}",
+                    "search_service": self.search_services.get('clinical_docs', 'CLINICAL_DOCUMENTATION_SEARCH'),
                     "max_results": 50,
                     "id_column": "file_path",
                     "title_column": "MRN",
@@ -502,21 +502,21 @@ Always provide context about the data timeframe and any limitations of your anal
                 }
             },
             "clinical_notes_search": {
-                "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('clinical_notes', 'CLINICAL_NOTES_SEARCH')}",
+                "search_service": self.search_services.get('clinical_notes', 'CLINICAL_NOTES_SEARCH'),
                 "max_results": max_results,  # Use configurable value from sidebar
                 "id_column": "file_path",
                 "title_column": "MRN",
                 "filter": {}  # Empty filter allows searching all documents
             },
             "radiology_search": {
-                "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('radiology', 'RADIOLOGY_REPORTS_SEARCH')}",
+                "search_service": self.search_services.get('radiology', 'RADIOLOGY_REPORTS_SEARCH'),
                 "max_results": max_results,  # Use configurable value from sidebar
                 "id_column": "file_path",
                 "title_column": "MRN",
                 "filter": {}  # Empty filter allows searching all documents
             },
             "clinical_documentation_search": {
-                "search_service": f"{self.agent_database}.{self.agent_schema}.{self.search_services.get('clinical_docs', 'CLINICAL_DOCUMENTATION_SEARCH')}",
+                "search_service": self.search_services.get('clinical_docs', 'CLINICAL_DOCUMENTATION_SEARCH'),
                 "max_results": max_results,  # Use configurable value from sidebar
                 "id_column": "file_path",
                 "title_column": "MRN",
