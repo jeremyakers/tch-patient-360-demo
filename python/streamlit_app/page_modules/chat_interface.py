@@ -98,18 +98,6 @@ def render_chat_interface():
     
     # Sidebar for conversation and examples
     with st.sidebar:
-        # Patient context
-        st.subheader("👤 Patient Context")
-        if st.session_state.get('current_patient'):
-            patient = st.session_state.current_patient
-            st.info(f"**{patient.get('full_name', 'Unknown')}**\n"
-                   f"MRN: {patient.get('mrn', 'Unknown')}\n"
-                   f"Age: {patient.get('current_age', 'Unknown')} years")
-        else:
-            st.info("No patient currently selected")
-        
-        st.markdown("---")
-        
         # Conversation section
         st.subheader("💬 Conversation")
         
@@ -163,33 +151,6 @@ def render_chat_interface():
         )
         st.session_state['cortex_search_max_results'] = int(max_docs)
         
-        # Debug panel for troubleshooting
-        st.markdown("---")
-        st.subheader("🔍 Debug Panel")
-        
-        # Show agent configuration
-        try:
-            from services.cortex_agents import CortexAgentsService
-            agent_service = CortexAgentsService()
-            st.info(f"🤖 Agent: {agent_service.agent_name}")
-            st.info(f"🔗 Endpoint: {agent_service.api_endpoint}")
-            st.info(f"📊 Model: {agent_service.model}")
-        except Exception as e:
-            st.warning(f"⚠️ Agent info unavailable: {e}")
-            
-        # Show thread information
-        thread_id = st.session_state.get('cortex_thread_id')
-        if thread_id:
-            st.success(f"🧵 Thread: {thread_id[:8]}...")
-        else:
-            st.info("🧵 No active thread (disabled for debugging)")
-            
-        st.info("📜 All debug details are logged - check application logs for full trace")
-        
-        # Show logging status
-        import logging
-        logger = logging.getLogger(__name__)
-        st.info(f"📝 Logger level: {logger.level}")
     
     # Initialize session state for chat
     if 'chat_messages' not in st.session_state:
