@@ -160,10 +160,10 @@ class CortexAgentsService:
             print("CURRENT AGENT CONFIGURATION:")
             print("="*80)
             if hasattr(describe_resp, 'content'):
-                import json
+                import json as json_module
                 try:
-                    agent_config = json.loads(describe_resp.content if isinstance(describe_resp.content, str) else describe_resp.content.decode('utf-8'))
-                    print(json.dumps(agent_config, indent=2))
+                    agent_config = json_module.loads(describe_resp.content if isinstance(describe_resp.content, str) else describe_resp.content.decode('utf-8'))
+                    print(json_module.dumps(agent_config, indent=2))
                 except Exception as e:
                     print(f"Could not parse agent config: {e}")
                     print(f"Raw content: {describe_resp.content}")
