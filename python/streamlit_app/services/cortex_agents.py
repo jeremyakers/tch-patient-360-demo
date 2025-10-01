@@ -541,6 +541,7 @@ Always provide context about the data timeframe and any limitations of your anal
                 "filter": {}  # Empty filter allows searching all documents
             }
         }
+        }  # Close payload dict
         
         # Log the search tool configurations for debugging
         logger.info("AI Chat tool_resources for search tools:")
