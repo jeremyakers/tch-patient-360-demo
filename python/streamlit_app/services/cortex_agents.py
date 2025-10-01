@@ -481,17 +481,9 @@ Always provide context about the data timeframe and any limitations of your anal
                 "name": self.agent_name
             },
             # Enable streaming for SSE
-            "stream": True
-        }
-        
-        # Only include thread_id if it's not None (v2 API requirement)
-        if thread_id is not None:
-            payload["thread_id"] = thread_id
-            
-        # Runtime tools configuration
-        # Note: The agent already has tools configured at creation time,
-        # but we include them here to potentially override settings like max_results
-        payload["tools"] = [
+            "stream": True,
+            # Include tools and tool_resources at runtime to override agent config
+            "tools": [
             {
                 "tool_spec": {
                     "type": "cortex_analyst_text_to_sql",
@@ -516,10 +508,9 @@ Always provide context about the data timeframe and any limitations of your anal
                     "name": "clinical_documentation_search"
                 }
             }
-        ]
-        
+        ],
         # Tool resources configuration with execution_environment for v2 API
-        payload["tool_resources"] = {
+        "tool_resources": {
             "healthcare_analyst": {
                 "semantic_model_file": self.semantic_model_file,  # Use the standard one, not chat version
                 "execution_environment": {
