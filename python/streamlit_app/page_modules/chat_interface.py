@@ -344,8 +344,6 @@ def render_chat_interface():
                         documents_needing_metadata = []
                         citation_info = []
                         
-                        import logging
-                        logger = logging.getLogger(__name__)
                         logger.info(f"Chat Interface: Processing {len(message['citations'])} citations")
                         
                         for i, citation in enumerate(message['citations']):
