@@ -567,6 +567,8 @@ def render_chat_interface():
     if query := st.chat_input("Ask about patients, conditions, or search clinical documents...", key="chat_input"):
         # Process the query
         _process_user_query(query)
+        # Rerun to move input back to bottom after response is added
+        st.rerun()
 
 def _process_user_query(query: str):
     """Process a user query through Cortex Agents."""
